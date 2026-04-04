@@ -1,0 +1,40 @@
+{
+  "sources": [
+    {
+      "id": "cyclonedx",
+      "kind": "cyclonedx-json",
+      "location": "/workspace/bom.json"
+    }
+  ],
+  "packages": [
+    {
+      "provenance": {
+        "sourceIds": ["cyclonedx"],
+        "fieldOrigins": {
+          "ecosystem": "cyclonedx",
+          "project": "cyclonedx",
+          "name": "cyclonedx",
+          "version": "cyclonedx",
+          "dependencyType": "cyclonedx",
+          "rawLicense": "cyclonedx",
+          "licenseKey": "cyclonedx",
+          "repository": "cyclonedx",
+          "embeddedLicensePath": "cyclonedx",
+          "embeddedLicenseText": "cyclonedx",
+          "metadataSource": "cyclonedx"
+        }
+      },
+      "ecosystem": "node",
+      "project": "web",
+      "name": "react",
+      "version": "19.2.4",
+      "dependencyType": "dependency",
+      "rawLicense": "MIT",
+      "licenseKey": "MIT",
+      "repository": "https://github.com/facebook/react.git",
+      "embeddedLicensePath": "cyclonedx:pkg:npm/react@19.2.4:license[0]",
+      "embeddedLicenseText": "MIT License",
+      "metadataSource": "cyclonedx-json"
+    }
+  ]
+}

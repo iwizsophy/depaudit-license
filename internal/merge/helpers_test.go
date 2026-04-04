@@ -1,0 +1,184 @@
+package merge
+
+import (
+	"testing"
+
+	"depaudit-license/internal/inventory"
+)
+
+func TestNewSourceAndSingleSourceDocumentSeedProvenance(t *testing.T) {
+	t.Parallel()
+
+	source := NewSource("repo", "repository-scan", "/workspace/repo", ".")
+	doc := SingleSourceDocument(source, []inventory.Package{{
+		Ecosystem:      "node",
+		Project:        "web",
+		Name:           "react",
+		Version:        "19.2.4",
+		DependencyType: "dependency",
+		LicenseKey:     "MIT",
+		Repository:     "https://github.com/facebook/react",
+	}})
+
+	if doc.Sources[0].DisplayLocation != "." {
+		t.Fatalf("display location = %q", doc.Sources[0].DisplayLocation)
+	}
+	pkg := doc.Packages[0]
+	if len(pkg.Provenance.SourceIDs) != 1 || pkg.Provenance.SourceIDs[0] != "repo" {
+		t.Fatalf("source ids = %#v", pkg.Provenance.SourceIDs)
+	}
+	if pkg.Provenance.FieldOrigins["repository"] != "repo" {
+		t.Fatalf("field origins = %#v", pkg.Provenance.FieldOrigins)
+	}
+}
+
+func TestValidateDocumentRejectsMissingAndDuplicateSources(t *testing.T) {
+	t.Parallel()
+
+	err := ValidateDocument(inventory.Document{
+		Sources: []inventory.Source{{ID: ""}},
+	})
+	if err == nil {
+		t.Fatal("expected empty source id error")
+	}
+
+	err = ValidateDocument(inventory.Document{
+		Sources: []inventory.Source{{ID: "a"}, {ID: "a"}},
+	})
+	if err == nil {
+		t.Fatal("expected duplicate source error")
+	}
+
+	err = ValidateDocument(inventory.Document{
+		Sources:  []inventory.Source{{ID: "repo"}},
+		Packages: []inventory.Package{{Name: "react", Provenance: inventory.PackageProvenance{SourceIDs: []string{"missing"}}}},
+	})
+	if err == nil {
+		t.Fatal("expected missing source error")
+	}
+}
+
+func TestMergeMetadataSourceAndHelpers(t *testing.T) {
+	t.Parallel()
+
+	if got := mergeMetadataSource("", "spdx"); got != "spdx" {
+		t.Fatalf("mergeMetadataSource empty = %q", got)
+	}
+	if got := mergeMetadataSource("spdx", "node-modules"); got != "merged" {
+		t.Fatalf("mergeMetadataSource merged = %q", got)
+	}
+	if got := firstSource(nil); got != "" {
+		t.Fatalf("firstSource nil = %q", got)
+	}
+
+	prov := inventory.PackageProvenance{}
+	ensurePackageProvenance(&prov)
+	if prov.FieldOrigins == nil {
+		t.Fatal("expected field origins map")
+	}
+}
+
+func TestMergeHelpersCoverTargetSelectionAndOrigins(t *testing.T) {
+	t.Parallel()
+
+	existing := []inventory.Package{
+		{Ecosystem: "node", Project: "web", Name: "react", Version: "1.0.0", PURL: "pkg:npm/react@1.0.0"},
+		{Ecosystem: "node", Project: "admin", Name: "shared", Version: "2.0.0"},
+	}
+	primary := map[string]int{primaryKey(existing[0]): 0}
+	secondary := map[string][]int{
+		secondaryKey(existing[1]): {1},
+	}
+
+	if idx, ok := findMergeTarget(inventory.Package{PURL: "pkg:npm/react@1.0.0"}, existing, primary, secondary); !ok || idx != 0 {
+		t.Fatalf("expected purl merge target, got %d %v", idx, ok)
+	}
+	if idx, ok := findMergeTarget(inventory.Package{Ecosystem: "node", Name: "shared", Version: "2.0.0"}, existing, primary, secondary); !ok || idx != 1 {
+		t.Fatalf("expected secondary merge target, got %d %v", idx, ok)
+	}
+	if _, ok := findMergeTarget(inventory.Package{Ecosystem: "node", Name: "missing", Version: "1.0.0"}, existing, primary, secondary); ok {
+		t.Fatal("expected no merge target")
+	}
+
+	pkg := normalizePackage(inventory.Package{
+		Provenance: inventory.PackageProvenance{
+			SourceIDs:      []string{" b ", "", "a", "a"},
+			ConflictFields: []string{" version ", "", "name"},
+			FieldOrigins:   map[string]string{"name": " repo "},
+		},
+		Ecosystem:      " node ",
+		Project:        " web ",
+		Name:           " react ",
+		Version:        " 1.0.0 ",
+		DependencyType: " dependency ",
+	})
+	if got := pkg.Provenance.SourceIDs; len(got) != 2 || got[0] != "a" || got[1] != "b" {
+		t.Fatalf("source ids = %#v", got)
+	}
+	if got := pkg.Provenance.ConflictFields; len(got) != 2 || got[0] != "name" || got[1] != "version" {
+		t.Fatalf("conflict fields = %#v", got)
+	}
+	if pkg.Provenance.FieldOrigins["name"] != "repo" || pkg.Ecosystem != "node" || pkg.Project != "web" || pkg.Name != "react" || pkg.Version != "1.0.0" {
+		t.Fatalf("normalized package = %#v", pkg)
+	}
+
+	if got := uniqueSorted([]string{" b ", "", "a", "b"}); len(got) != 2 || got[0] != "a" || got[1] != "b" {
+		t.Fatalf("uniqueSorted = %#v", got)
+	}
+}
+
+func TestMergeStringFieldAndSeedingHelpers(t *testing.T) {
+	t.Parallel()
+
+	target := ""
+	prov := inventory.PackageProvenance{}
+	conflicts := mergeStringField("pkg:key", "repository", &target, &prov, "", "https://example.test/repo", inventory.Package{}, inventory.Package{
+		Provenance: inventory.PackageProvenance{SourceIDs: []string{"incoming"}},
+	})
+	if len(conflicts) != 0 || target != "https://example.test/repo" || prov.FieldOrigins["repository"] != "incoming" {
+		t.Fatalf("fill branch = %#v %#v %q", conflicts, prov, target)
+	}
+
+	target = "same"
+	prov = inventory.PackageProvenance{FieldOrigins: map[string]string{}}
+	conflicts = mergeStringField("pkg:key", "repository", &target, &prov, "same", "same", inventory.Package{
+		Provenance: inventory.PackageProvenance{SourceIDs: []string{"base"}},
+	}, inventory.Package{
+		Provenance: inventory.PackageProvenance{SourceIDs: []string{"incoming"}},
+	})
+	if len(conflicts) != 0 || prov.FieldOrigins["repository"] != "base" {
+		t.Fatalf("equal branch = %#v %#v", conflicts, prov)
+	}
+
+	target = "left"
+	prov = inventory.PackageProvenance{}
+	conflicts = mergeStringField("pkg:key", "repository", &target, &prov, "left", "right", inventory.Package{
+		Provenance: inventory.PackageProvenance{SourceIDs: []string{"base"}},
+	}, inventory.Package{
+		Provenance: inventory.PackageProvenance{SourceIDs: []string{"incoming"}},
+	})
+	if len(conflicts) != 1 || conflicts[0].Field != "repository" || len(prov.ConflictFields) != 1 || prov.ConflictFields[0] != "repository" {
+		t.Fatalf("conflict branch = %#v %#v", conflicts, prov)
+	}
+
+	pkg := inventory.Package{
+		Ecosystem:      "node",
+		Name:           "react",
+		Version:        "1.0.0",
+		Repository:     "https://example.test/repo",
+		CopyrightYear:  2026,
+		MetadataSource: "sbom",
+		Provenance:     inventory.PackageProvenance{},
+	}
+	ensureFieldOrigins(&pkg)
+	seedFieldOrigins(&pkg, "repo")
+	if pkg.Provenance.FieldOrigins["repository"] != "repo" || pkg.Provenance.FieldOrigins["copyrightYear"] != "repo" || pkg.Provenance.FieldOrigins["metadataSource"] != "repo" {
+		t.Fatalf("seeded field origins = %#v", pkg.Provenance.FieldOrigins)
+	}
+
+	prov = inventory.PackageProvenance{}
+	setFieldOrigin(&prov, "repository", "")
+	if len(prov.FieldOrigins) != 0 {
+		t.Fatalf("expected empty origin map, got %#v", prov.FieldOrigins)
+	}
+}

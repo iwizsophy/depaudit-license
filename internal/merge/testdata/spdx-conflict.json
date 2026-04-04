@@ -1,0 +1,36 @@
+{
+  "sources": [
+    {
+      "id": "spdx",
+      "kind": "spdx-json",
+      "location": "/workspace/spdx.json"
+    }
+  ],
+  "packages": [
+    {
+      "provenance": {
+        "sourceIds": ["spdx"],
+        "fieldOrigins": {
+          "ecosystem": "spdx",
+          "project": "spdx",
+          "name": "spdx",
+          "version": "spdx",
+          "dependencyType": "spdx",
+          "rawLicense": "spdx",
+          "licenseKey": "spdx",
+          "repository": "spdx",
+          "metadataSource": "spdx"
+        }
+      },
+      "ecosystem": "node",
+      "project": "web",
+      "name": "react",
+      "version": "19.2.4",
+      "dependencyType": "dependency",
+      "rawLicense": "MIT",
+      "licenseKey": "MIT",
+      "repository": "https://example.invalid/react.git",
+      "metadataSource": "spdx-json"
+    }
+  ]
+}

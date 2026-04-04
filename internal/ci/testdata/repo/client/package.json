@@ -1,0 +1,9 @@
+{
+  "name": "ci-web",
+  "dependencies": {
+    "react": "19.2.4"
+  },
+  "devDependencies": {
+    "vite": "7.1.9"
+  }
+}

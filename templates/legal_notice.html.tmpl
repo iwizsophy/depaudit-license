@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>depaudit-license legal notice</title>
+  <style>{{.ThemeCSS}}</style>
+</head>
+<body>
+  <main class="page">
+    <section class="sheet">
+      <h1>Open Source Software Legal Notice</h1>
+      <p class="lead">
+        製品に含まれる依存関係のみを対象に、ライセンス別の対象パッケージと通知文をまとめています。
+      </p>
+      <div class="meta">
+        <div>Repository root: <code>{{.Root}}</code></div>
+        <div>Generated at: <code>{{.GeneratedAt}}</code></div>
+        <div>Production packages: <code>{{.ProductionPackages}}</code></div>
+        <div>Production license groups: <code>{{.ProductionLicenses}}</code></div>
+      </div>
+    </section>
+
+    <section class="groups">
+      {{range .LegalNoticeEvidence}}
+      <article class="group">
+        <header class="group-header">
+          <h2>{{.Title}}</h2>
+          <p>{{len .Packages}} package(s) / {{.Source}}</p>
+        </header>
+        <div class="group-body">
+          <div class="pkg-list">
+            {{range .Packages}}
+            <article class="pkg">
+              <strong>{{.Name}}</strong>
+              <div class="pkg-meta">
+                {{.Ecosystem}} / {{.Project}} / {{.Version}}
+                {{if .CopyrightHolder}}<br>Copyright: {{.CopyrightYear}} {{.CopyrightHolder}}{{end}}
+                {{if .Repository}}<br>Repository: <a href="{{.Repository}}" target="_blank" rel="noreferrer">{{.Repository}}</a>{{end}}
+                {{if and (not .Repository) .Homepage}}<br>Homepage: <a href="{{.Homepage}}" target="_blank" rel="noreferrer">{{.Homepage}}</a>{{end}}
+              </div>
+            </article>
+            {{end}}
+          </div>
+          <section class="notice">
+            <h3>{{if eq .Kind "embedded-license-text"}}Embedded License Text{{else}}Notice Text{{end}}</h3>
+            {{if .LicenseName}}<div class="pkg-meta">License: {{.LicenseName}}</div>{{end}}
+            {{if .LicenseFilePath}}<div class="pkg-meta">License file: {{.LicenseFilePath}}</div>{{end}}
+            <pre>{{.Text}}</pre>
+          </section>
+        </div>
+      </article>
+      {{end}}
+    </section>
+  </main>
+</body>
+</html>

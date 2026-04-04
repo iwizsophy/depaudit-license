@@ -1,0 +1,185 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  verify-tag:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Validate semantic version tag
+        shell: bash
+        run: |
+          if [[ ! "${GITHUB_REF_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Expected an exact vX.Y.Z tag, got: ${GITHUB_REF_NAME}" >&2
+            exit 1
+          fi
+
+      - name: Validate annotated tag on remote ref
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag_type=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${GITHUB_REF_NAME}" --jq '.object.type')
+          if [[ "${tag_type}" != "tag" ]]; then
+            echo "Tag ${GITHUB_REF_NAME} must be annotated." >&2
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate tagged commit is on main
+        shell: bash
+        run: |
+          tag_commit=$(git rev-list -n 1 "${GITHUB_REF_NAME}")
+          git fetch --no-tags origin main
+          if ! git merge-base --is-ancestor "${tag_commit}" "origin/main"; then
+            echo "Tag ${GITHUB_REF_NAME} points to ${tag_commit}, which is not contained in origin/main." >&2
+            exit 1
+          fi
+
+  verify:
+    needs: verify-tag
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Test
+        run: go test ./...
+
+      - name: Smoke run
+        run: >
+          go run .
+          -input repository-scan=./internal/ci/testdata/repo
+          -output-html dist/release-smoke-report.html
+          -output-json dist/release-smoke-report.json
+          -output-legal-html dist/release-smoke-legal-notice.html
+
+  build:
+    needs: verify
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            archive_ext: tar.gz
+          - goos: linux
+            goarch: arm64
+            archive_ext: tar.gz
+          - goos: darwin
+            goarch: amd64
+            archive_ext: tar.gz
+          - goos: darwin
+            goarch: arm64
+            archive_ext: tar.gz
+          - goos: windows
+            goarch: amd64
+            archive_ext: zip
+          - goos: windows
+            goarch: arm64
+            archive_ext: zip
+
+    env:
+      PACKAGE_NAME: depaudit-license-${{ github.ref_name }}-${{ matrix.goos }}-${{ matrix.goarch }}
+      ARCHIVE_NAME: depaudit-license-${{ github.ref_name }}-${{ matrix.goos }}-${{ matrix.goarch }}.${{ matrix.archive_ext }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install Syft
+        uses: anchore/sbom-action/download-syft@v0
+
+      - name: Build package contents
+        shell: bash
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: "0"
+        run: |
+          package_root="release-root/${PACKAGE_NAME}"
+          mkdir -p "${package_root}/templates" "${package_root}/configs"
+
+          binary_name="depaudit-license-${GOOS}-${GOARCH}"
+          if [ "$GOOS" = "windows" ]; then
+            binary_name="${binary_name}.exe"
+          fi
+
+          go build -trimpath -o "${package_root}/${binary_name}" .
+          cp README.md README.ja.md LICENSE THIRD-PARTY-NOTICES.md "${package_root}/"
+          cp -R templates/. "${package_root}/templates/"
+          cp -R configs/. "${package_root}/configs/"
+
+      - name: Generate package SBOM
+        shell: bash
+        run: |
+          package_root="release-root/${PACKAGE_NAME}"
+          syft "${package_root}" -o "spdx-json=${package_root}/${PACKAGE_NAME}.spdx.json"
+
+      - name: Create archive (tar.gz)
+        if: matrix.archive_ext == 'tar.gz'
+        shell: bash
+        run: |
+          tar -czf "${ARCHIVE_NAME}" -C release-root "${PACKAGE_NAME}"
+
+      - name: Create archive (zip)
+        if: matrix.archive_ext == 'zip'
+        shell: bash
+        run: |
+          cd release-root
+          zip -r "../${ARCHIVE_NAME}" "${PACKAGE_NAME}"
+
+      - name: Upload archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ARCHIVE_NAME }}
+          path: ${{ env.ARCHIVE_NAME }}
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+
+      - name: Generate checksums
+        shell: bash
+        run: |
+          cd release-artifacts
+          find . -type f ! -name 'SHA256SUMS.txt' -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS.txt
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-artifacts/**/*
+          fail_on_unmatched_files: true
+          generate_release_notes: true

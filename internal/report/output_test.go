@@ -1,0 +1,126 @@
+package report
+
+import (
+	"encoding/json"
+	"testing"
+
+	"depaudit-license/internal/catalog"
+	"depaudit-license/internal/inventory"
+)
+
+func TestBuildOutputWrapsViewWithSchemaAndProvenance(t *testing.T) {
+	t.Parallel()
+
+	view := View{
+		GeneratedAt: "2026-04-02T00:00:00Z",
+		Root:        ".",
+		Packages: []inventory.Package{{
+			Provenance: inventory.PackageProvenance{
+				SourceIDs:      []string{"repo-scan", "cyclonedx"},
+				FieldOrigins:   map[string]string{"repository": "repo-scan", "embeddedLicenseText": "cyclonedx"},
+				ConflictFields: []string{"homepage"},
+			},
+			Ecosystem:           "node",
+			Project:             "web",
+			Name:                "react",
+			Version:             "19.2.4",
+			PURL:                "pkg:npm/react@19.2.4",
+			DependencyType:      "dependency",
+			RawLicense:          "MIT",
+			LicenseKey:          "MIT",
+			EmbeddedLicenseText: "MIT License",
+		}},
+	}
+	output := BuildOutput(view, OutputConfig{
+		InputKind: "repository-scan",
+		CatalogSources: []catalog.SourceMetadata{
+			{Kind: "file", Location: "D:\\repo\\configs\\licenses.json", DisplayLocation: "configs\\licenses.json", PinningMode: "implicit", ContentSHA256: "abc"},
+			{Kind: "remote", Location: "https://example.test/licenses.json#sha256=deadbeef", DisplayLocation: "https://example.test/licenses.json#sha256=deadbeef", ResolvedURL: "https://example.test/licenses.json", PinningMode: "pinned", RequestedSHA256: "deadbeef", ContentSHA256: "beef", RetrievedAt: "2026-04-02T00:00:00Z"},
+		},
+		SelectedLocale:   "ja",
+		EffectiveCatalog: json.RawMessage(`{"fallback":"Unknown","licenses":[]}`),
+	})
+
+	if output.SchemaVersion != JSONSchemaVersion {
+		t.Fatalf("schema version = %q", output.SchemaVersion)
+	}
+	if output.Provenance.InputKind != "repository-scan" {
+		t.Fatalf("input kind = %q", output.Provenance.InputKind)
+	}
+	if output.Provenance.SelectedLocale != "ja" {
+		t.Fatalf("selected locale = %q", output.Provenance.SelectedLocale)
+	}
+	if len(output.Provenance.CatalogSources) != 2 {
+		t.Fatalf("catalog source count = %d", len(output.Provenance.CatalogSources))
+	}
+	if output.Provenance.CatalogSources[0].Kind != "file" {
+		t.Fatalf("first catalog source kind = %q", output.Provenance.CatalogSources[0].Kind)
+	}
+	if output.Provenance.CatalogSources[0].Location != "configs\\licenses.json" {
+		t.Fatalf("first catalog source location = %q", output.Provenance.CatalogSources[0].Location)
+	}
+	if output.Provenance.CatalogSources[1].Kind != "remote" {
+		t.Fatalf("second catalog source kind = %q", output.Provenance.CatalogSources[1].Kind)
+	}
+	if output.Provenance.CatalogSources[1].PinningMode != "pinned" {
+		t.Fatalf("pinning mode = %q", output.Provenance.CatalogSources[1].PinningMode)
+	}
+	if string(output.Provenance.EffectiveCatalog) == "" {
+		t.Fatal("expected effective catalog snapshot")
+	}
+	if output.Report.Root != view.Root {
+		t.Fatalf("report root = %q", output.Report.Root)
+	}
+	if len(output.Report.Packages) != 1 {
+		t.Fatalf("package count = %d", len(output.Report.Packages))
+	}
+	if output.Report.Packages[0].Provenance.FieldOrigins["repository"] != "repo-scan" {
+		t.Fatalf("repository origin = %q", output.Report.Packages[0].Provenance.FieldOrigins["repository"])
+	}
+}
+
+func TestBuildOutputNormalizesBlankInputKindAndCatalogDisplayLocation(t *testing.T) {
+	t.Parallel()
+
+	output := BuildOutput(View{}, OutputConfig{
+		InputKind: "   ",
+		CatalogSources: []catalog.SourceMetadata{
+			{Kind: "file", Location: "D:\\repo\\configs\\licenses.json", DisplayLocation: "   "},
+		},
+		SelectedLocale: "  en  ",
+	})
+
+	if output.Provenance.InputKind != "repository-scan" {
+		t.Fatalf("input kind = %q", output.Provenance.InputKind)
+	}
+	if output.Provenance.SelectedLocale != "en" {
+		t.Fatalf("selected locale = %q", output.Provenance.SelectedLocale)
+	}
+	if len(output.Provenance.CatalogSources) != 1 {
+		t.Fatalf("catalog source count = %d", len(output.Provenance.CatalogSources))
+	}
+	if output.Provenance.CatalogSources[0].Location != "D:\\repo\\configs\\licenses.json" {
+		t.Fatalf("catalog source location = %q", output.Provenance.CatalogSources[0].Location)
+	}
+}
+
+func TestBuildOutputReturnsNilCatalogSourcesWhenUnset(t *testing.T) {
+	t.Parallel()
+
+	output := BuildOutput(View{}, OutputConfig{})
+
+	if output.Provenance.CatalogSources != nil {
+		t.Fatalf("catalog sources = %#v", output.Provenance.CatalogSources)
+	}
+}
+
+func TestFirstNonEmptyReturnsTrimmedValueOrBlank(t *testing.T) {
+	t.Parallel()
+
+	if got := firstNonEmpty("   ", "\tvalue\t", "later"); got != "value" {
+		t.Fatalf("firstNonEmpty picked %q", got)
+	}
+	if got := firstNonEmpty("", "   ", "\t"); got != "" {
+		t.Fatalf("firstNonEmpty blank = %q", got)
+	}
+}

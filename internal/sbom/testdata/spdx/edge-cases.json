@@ -1,0 +1,45 @@
+{
+  "spdxVersion": "SPDX-2.3",
+  "SPDXID": "SPDXRef-DOCUMENT",
+  "packages": [
+    {
+      "SPDXID": "SPDXRef-App",
+      "name": "edge-app",
+      "versionInfo": "1.0.0",
+      "licenseConcluded": "NOASSERTION",
+      "licenseDeclared": "NOASSERTION"
+    },
+    {
+      "SPDXID": "SPDXRef-Tool",
+      "name": "example.com/tool",
+      "versionInfo": "v1.2.3",
+      "licenseInfoFromFiles": [
+        "NONE",
+        "Apache-2.0",
+        "MIT",
+        "Apache-2.0"
+      ],
+      "homepage": "https://pkg.go.dev/example.com/tool",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:golang/example.com/tool@v1.2.3"
+        },
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "vcs",
+          "referenceLocator": "https://github.com/example/tool"
+        }
+      ],
+      "copyrightText": "Example Tool Authors"
+    }
+  ],
+  "relationships": [
+    {
+      "spdxElementId": "SPDXRef-Tool",
+      "relationshipType": "DEPENDENCY_OF",
+      "relatedSpdxElement": "SPDXRef-App"
+    }
+  ]
+}

@@ -1,0 +1,59 @@
+{
+  "sources": [
+    {
+      "id": "repo-scan",
+      "kind": "repository-scan",
+      "location": "/workspace"
+    }
+  ],
+  "packages": [
+    {
+      "provenance": {
+        "sourceIds": ["repo-scan"],
+        "fieldOrigins": {
+          "ecosystem": "repo-scan",
+          "project": "repo-scan",
+          "name": "repo-scan",
+          "version": "repo-scan",
+          "dependencyType": "repo-scan",
+          "rawLicense": "repo-scan",
+          "licenseKey": "repo-scan",
+          "repository": "repo-scan",
+          "metadataSource": "repo-scan"
+        }
+      },
+      "ecosystem": "node",
+      "project": "web",
+      "name": "react",
+      "version": "19.2.4",
+      "dependencyType": "dependency",
+      "rawLicense": "MIT",
+      "licenseKey": "MIT",
+      "repository": "https://github.com/facebook/react.git",
+      "metadataSource": "node-modules"
+    },
+    {
+      "provenance": {
+        "sourceIds": ["repo-scan"],
+        "fieldOrigins": {
+          "ecosystem": "repo-scan",
+          "project": "repo-scan",
+          "name": "repo-scan",
+          "version": "repo-scan",
+          "dependencyType": "repo-scan",
+          "rawLicense": "repo-scan",
+          "licenseKey": "repo-scan",
+          "metadataSource": "repo-scan"
+        }
+      },
+      "ecosystem": "node",
+      "project": "web",
+      "name": "vite",
+      "version": "8.0.1",
+      "dependencyType": "devDependency",
+      "rawLicense": "MIT",
+      "licenseKey": "MIT",
+      "metadataSource": "node-modules"
+    }
+  ]
+}

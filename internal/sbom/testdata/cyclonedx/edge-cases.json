@@ -1,0 +1,45 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.5",
+  "version": 1,
+  "metadata": {
+    "component": {
+      "bom-ref": "root-app",
+      "type": "application",
+      "name": "edge-app",
+      "version": "1.0.0"
+    }
+  },
+  "components": [
+    {
+      "bom-ref": "widget-ref",
+      "type": "library",
+      "group": "acme",
+      "name": "widget",
+      "version": "1.2.3",
+      "scope": "excluded",
+      "licenses": [
+        {
+          "license": {
+            "name": "Custom Notice",
+            "text": {
+              "content": "Custom license body",
+              "contentType": "text/plain"
+            }
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "documentation",
+          "url": "https://docs.example.com/widget"
+        },
+        {
+          "type": "website",
+          "url": "https://www.example.com/widget"
+        }
+      ],
+      "copyright": "Acme Corp"
+    }
+  ]
+}

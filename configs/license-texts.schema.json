@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://depaudit-license.local/configs/license-texts.schema.json",
+  "title": "depaudit-license localized license texts",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["locale", "licenses"],
+  "properties": {
+    "locale": {
+      "type": "string",
+      "minLength": 1
+    },
+    "licenses": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/localizedText"
+      }
+    }
+  },
+  "$defs": {
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "stringArray": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/nonEmptyString"
+      },
+      "uniqueItems": true
+    },
+    "localizedText": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "description", "obligations", "permissions", "limitations"],
+      "properties": {
+        "key": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "description": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "obligations": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "permissions": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "limitations": {
+          "$ref": "#/$defs/stringArray"
+        }
+      }
+    }
+  }
+}

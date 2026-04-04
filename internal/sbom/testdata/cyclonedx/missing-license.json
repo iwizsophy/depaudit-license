@@ -1,0 +1,15 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.5",
+  "version": 1,
+  "components": [
+    {
+      "bom-ref": "pkg:generic/acme/widget@1.2.3",
+      "type": "library",
+      "group": "acme",
+      "name": "widget",
+      "version": "1.2.3",
+      "purl": "pkg:generic/acme/widget@1.2.3"
+    }
+  ]
+}

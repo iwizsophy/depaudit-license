@@ -1,0 +1,84 @@
+{
+  "spdxVersion": "SPDX-2.3",
+  "SPDXID": "SPDXRef-DOCUMENT",
+  "name": "sample-spdx",
+  "documentDescribes": [
+    "SPDXRef-Application"
+  ],
+  "packages": [
+    {
+      "SPDXID": "SPDXRef-Application",
+      "name": "sample-app",
+      "versionInfo": "1.0.0",
+      "licenseConcluded": "NOASSERTION",
+      "licenseDeclared": "NOASSERTION"
+    },
+    {
+      "SPDXID": "SPDXRef-React",
+      "name": "react",
+      "versionInfo": "19.2.4",
+      "licenseConcluded": "MIT",
+      "copyrightText": "Copyright 2024 Meta",
+      "homepage": "https://react.dev/",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:npm/react@19.2.4"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Scheduler",
+      "name": "scheduler",
+      "versionInfo": "0.26.0",
+      "licenseDeclared": "MIT OR Apache-2.0",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:npm/scheduler@0.26.0"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Custom",
+      "name": "custom-lib",
+      "versionInfo": "1.0.0",
+      "licenseInfoFromFiles": [
+        "LicenseRef-Custom"
+      ],
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:generic/custom-lib@1.0.0"
+        }
+      ]
+    }
+  ],
+  "relationships": [
+    {
+      "spdxElementId": "SPDXRef-Application",
+      "relationshipType": "DEPENDS_ON",
+      "relatedSpdxElement": "SPDXRef-React"
+    },
+    {
+      "spdxElementId": "SPDXRef-React",
+      "relationshipType": "DEPENDS_ON",
+      "relatedSpdxElement": "SPDXRef-Scheduler"
+    },
+    {
+      "spdxElementId": "SPDXRef-Application",
+      "relationshipType": "DEPENDS_ON",
+      "relatedSpdxElement": "SPDXRef-Custom"
+    }
+  ],
+  "hasExtractedLicensingInfos": [
+    {
+      "licenseId": "LicenseRef-Custom",
+      "name": "Custom Internal License",
+      "extractedText": "Custom internal license text"
+    }
+  ]
+}

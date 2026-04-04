@@ -1,0 +1,739 @@
+{
+  "fallback": "Unknown",
+  "licenses": [
+    {
+      "key": "MIT",
+      "name": "MIT License",
+      "family": "MIT",
+      "version": "",
+      "copyleft_strength": "none",
+      "requires_manual_review": false,
+      "spdx_ids": [
+        "MIT"
+      ],
+      "names": [
+        "MIT License"
+      ],
+      "exact_urls": [
+        "https://licenses.nuget.org/MIT",
+        "https://github.com/microsoft/dotnet/blob/master/LICENSE"
+      ],
+      "url_prefixes": [
+        "https://opensource.org/licenses/mit"
+      ],
+      "contains": [
+        "mit"
+      ],
+      "color": "#2f855a",
+      "risk_level": "low",
+      "notice_template": "MIT License\n\nCopyright (c) {{.Year}} {{.Holders}}\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE."
+    },
+    {
+      "key": "Apache-2.0",
+      "name": "Apache License 2.0",
+      "family": "Apache",
+      "version": "2.0",
+      "copyleft_strength": "none",
+      "requires_manual_review": false,
+      "spdx_ids": [
+        "Apache-2.0"
+      ],
+      "names": [
+        "Apache License 2.0",
+        "Apache 2"
+      ],
+      "exact_urls": [
+        "https://licenses.nuget.org/Apache-2.0",
+        "https://www.apache.org/licenses/LICENSE-2.0",
+        "http://www.apache.org/licenses/LICENSE-2.0"
+      ],
+      "url_prefixes": [
+        "https://www.apache.org/licenses/license-2.0",
+        "http://www.apache.org/licenses/license-2.0"
+      ],
+      "contains": [
+        "apache-2.0"
+      ],
+      "color": "#2b6cb0",
+      "risk_level": "low",
+      "notice_template": "Apache License\nVersion 2.0, January 2004\nhttp://www.apache.org/licenses/\n\nCopyright {{.Year}} {{.Holders}}\n\nLicensed under the Apache License, Version 2.0 (the \"License\");\nyou may not use this file except in compliance with the License.\nYou may obtain a copy of the License at\n\n    http://www.apache.org/licenses/LICENSE-2.0\n\nUnless required by applicable law or agreed to in writing, software\ndistributed under the License is distributed on an \"AS IS\" BASIS,\nWITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\nSee the License for the specific language governing permissions and\nlimitations under the License."
+    },
+    {
+      "key": "ISC",
+      "name": "ISC License",
+      "family": "ISC",
+      "version": "",
+      "copyleft_strength": "none",
+      "requires_manual_review": false,
+      "spdx_ids": [
+        "ISC"
+      ],
+      "names": [
+        "ISC License"
+      ],
+      "exact_urls": [],
+      "url_prefixes": [],
+      "contains": [
+        "isc"
+      ],
+      "color": "#0f766e",
+      "risk_level": "low",
+      "notice_template": "ISC License\n\nCopyright (c) {{.Year}}, {{.Holders}}\n\nPermission to use, copy, modify, and/or distribute this software for any\npurpose with or without fee is hereby granted, provided that the above\ncopyright notice and this permission notice appear in all copies.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH\nREGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY\nAND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,\nINDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM\nLOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR\nOTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR\nPERFORMANCE OF THIS SOFTWARE."
+    },
+    {
+      "key": "BSD",
+      "name": "BSD License",
+      "family": "BSD",
+      "version": "",
+      "copyleft_strength": "none",
+      "requires_manual_review": false,
+      "spdx_ids": [],
+      "names": [
+        "BSD License"
+      ],
+      "exact_urls": [],
+      "url_prefixes": [],
+      "contains": [
+        "bsd license"
+      ],
+      "color": "#6b46c1",
+      "risk_level": "low",
+      "notice_template": "BSD License\n\nCopyright (c) {{.Year}}, {{.Holders}}\nAll rights reserved.\n\nRedistribution and use in source and binary forms, with or without\nmodification, are permitted provided that the following conditions are met:\n\n1. Redistributions of source code must retain the above copyright notice,\n   this list of conditions and the following disclaimer.\n\n2. Redistributions in binary form must reproduce the above copyright notice,\n   this list of conditions and the following disclaimer in the documentation\n   and/or other materials provided with the distribution.\n\nTHIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS \"AS IS\"\nAND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE\nIMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE\nDISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE\nFOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL\nDAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR\nSERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER\nCAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,\nOR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE\nOF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE."
+    },
+    {
+      "key": "BSD-2-Clause",
+      "name": "BSD 2-Clause License",
+      "family": "BSD",
+      "version": "2-Clause",
+      "copyleft_strength": "none",
+      "requires_manual_review": false,
+      "spdx_ids": [
+        "BSD-2-Clause"
+      ],
+      "names": [
+        "BSD 2-Clause License",
+        "BSD 2-Clause",
+        "2-Clause BSD"
+      ],
+      "exact_urls": [],
+      "url_prefixes": [],
+      "contains": [
+        "bsd-2-clause"
+      ],
+      "color": "#6b46c1",
+      "risk_level": "low",
+      "notice_template": "BSD 2-Clause License\n\nCopyright (c) {{.Year}}, {{.Holders}}\nAll rights reserved.\n\nRedistribution and use in source and binary forms, with or without\nmodification, are permitted provided that the following conditions are met:\n\n1. Redistributions of source code must retain the above copyright notice,\n   this list of conditions and the following disclaimer.\n\n2. Redistributions in binary form must reproduce the above copyright notice,\n   this list of conditions and the following disclaimer in the documentation\n   and/or other materials provided with the distribution.\n\nTHIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS \"AS IS\"\nAND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE\nIMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE\nDISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE\nFOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL\nDAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR\nSERVICES; LOSS OF USE, DATA OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER\nCAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,\nOR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE\nOF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE."
+    },
+    {
+      "key": "BSD-3-Clause",
+      "name": "BSD 3-Clause License",
+      "family": "BSD",
+      "version": "3-Clause",
+      "copyleft_strength": "none",
+      "requires_manual_review": false,
+      "spdx_ids": [
+        "BSD-3-Clause"
+      ],
+      "names": [
+        "BSD 3-Clause License",
+        "BSD 3-Clause",
+        "3-Clause BSD"
+      ],
+      "exact_urls": [],
+      "url_prefixes": [],
+      "contains": [
+        "bsd-3-clause"
+      ],
+      "color": "#6b46c1",
+      "risk_level": "low",
+      "notice_template": "BSD 3-Clause License\n\nCopyright (c) {{.Year}}, {{.Holders}}\nAll rights reserved.\n\nRedistribution and use in source and binary forms, with or without\nmodification, are permitted provided that the following conditions are met:\n\n1. Redistributions of source code must retain the above copyright notice,\n   this list of conditions and the following disclaimer.\n\n2. Redistributions in binary form must reproduce the above copyright notice,\n   this list of conditions and the following disclaimer in the documentation\n   and/or other materials provided with the distribution.\n\n3. Neither the name of the copyright holder nor the names of its contributors\n   may be used to endorse or promote products derived from this software\n   without specific prior written permission.\n\nTHIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS \"AS IS\"\nAND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE\nIMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE\nDISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE\nFOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL\nDAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR\nSERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER\nCAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,\nOR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE\nOF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE."
+    },
+    {
+      "key": "GPL-2.0",
+      "name": "GNU GPL v2.0",
+      "family": "GPL",
+      "version": "2.0",
+      "copyleft_strength": "strong",
+      "requires_manual_review": false,
+      "spdx_ids": [
+        "GPL-2.0",
+        "GPL-2.0-only",
+        "GPL-2.0-or-later",
+        "GPL-2.0+"
+      ],
+      "names": [
+        "GNU GPL v2.0",
+        "GNU General Public License v2.0",
+        "GPL v2",
+        "GPL-2"
+      ],
+      "exact_urls": [],
+      "url_prefixes": [],
+      "contains": [
+        "gpl-2.0",
+        "gnu general public license v2.0"
+      ],
+      "color": "#c53030",
+      "risk_level": "high",
+      "notice_template": "GNU GENERAL PUBLIC LICENSE\nVersion 2, June 1991\n\nCopyright (C) {{.Year}} {{.Holders}}\n\nThis program is free software; you can redistribute it and/or modify it\nunder the terms of the GNU General Public License as published by the Free\nSoftware Foundation; version 2 of the License.\n\nThis program is distributed in the hope that it will be useful, but WITHOUT\nANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS\nFOR A PARTICULAR PURPOSE. See the GNU General Public License for more details."
+    },
+    {
+      "key": "GPL-3.0",
+      "name": "GNU GPL v3.0",
+      "family": "GPL",
+      "version": "3.0",
+      "copyleft_strength": "strong",
+      "requires_manual_review": false,
+      "spdx_ids": [
+        "GPL-3.0",
+        "GPL-3.0-only",
+        "GPL-3.0-or-later",
+        "GPL-3.0+"
+      ],
+      "names": [
+        "GNU GPL v3.0",
+        "GNU General Public License v3.0",
+        "GPL v3",
+        "GPL-3"
+      ],
+      "exact_urls": [
+        "https://www.gnu.org/licenses/gpl-3.0.html"
+      ],
+      "url_prefixes": [],
+      "contains": [
+        "gpl-3.0",
+        "gnu general public license v3.0"
+      ],
+      "color": "#c53030",
+      "risk_level": "high",
+      "notice_template": "GNU GENERAL PUBLIC LICENSE\nVersion 3, 29 June 2007\n\nCopyright (C) {{.Year}} {{.Holders}}\n\nThis program is free software: you can redistribute it and/or modify it\nunder the terms of the GNU General Public License as published by the Free\nSoftware Foundation, either version 3 of the License, or (at your option)\nany later version.\n\nThis program is distributed in the hope that it will be useful, but WITHOUT\nANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS\nFOR A PARTICULAR PURPOSE. See the GNU General Public License for more details."
+    },
+    {
+      "key": "LGPL-2.1",
+      "name": "GNU LGPL v2.1",
+      "family": "LGPL",
+      "version": "2.1",
+      "copyleft_strength": "library",
+      "requires_manual_review": false,
+      "spdx_ids": [
+        "LGPL-2.1",
+        "LGPL-2.1-only",
+        "LGPL-2.1-or-later",
+        "LGPL-2.1+"
+      ],
+      "names": [
+        "GNU LGPL v2.1",
+        "GNU Lesser General Public License v2.1",
+        "LGPL v2.1"
+      ],
+      "exact_urls": [],
+      "url_prefixes": [],
+      "contains": [
+        "lgpl-2.1",
+        "gnu lesser general public license v2.1"
+      ],
+      "color": "#dd6b20",
+      "risk_level": "medium",
+      "notice_template": "GNU LESSER GENERAL PUBLIC LICENSE\nVersion 2.1, February 1999\n\nCopyright (C) {{.Year}} {{.Holders}}\n\nThis library is free software; you can redistribute it and/or modify it\nunder the terms of the GNU Lesser General Public License as published by the\nFree Software Foundation; version 2.1 of the License.\n\nThis library is distributed in the hope that it will be useful, but WITHOUT\nANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS\nFOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License for more\ndetails."
+    },
+    {
+      "key": "LGPL-3.0",
+      "name": "GNU LGPL v3.0",
+      "family": "LGPL",
+      "version": "3.0",
+      "copyleft_strength": "library",
+      "requires_manual_review": false,
+      "spdx_ids": [
+        "LGPL-3.0",
+        "LGPL-3.0-only",
+        "LGPL-3.0-or-later",
+        "LGPL-3.0+"
+      ],
+      "names": [
+        "GNU LGPL v3.0",
+        "GNU Lesser General Public License v3.0",
+        "LGPL v3"
+      ],
+      "exact_urls": [
+        "https://www.gnu.org/licenses/lgpl-3.0.html"
+      ],
+      "url_prefixes": [],
+      "contains": [
+        "lgpl-3.0",
+        "gnu lesser general public license v3.0"
+      ],
+      "color": "#dd6b20",
+      "risk_level": "medium",
+      "notice_template": "GNU LESSER GENERAL PUBLIC LICENSE\nVersion 3, 29 June 2007\n\nCopyright (C) {{.Year}} {{.Holders}}\n\nThis library is free software; you can redistribute it and/or modify it\nunder the terms of the GNU Lesser General Public License as published by the\nFree Software Foundation, either version 3 of the License, or (at your option)\nany later version.\n\nThis library is distributed in the hope that it will be useful, but WITHOUT\nANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS\nFOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License for more\ndetails."
+    },
+    {
+      "key": "AGPL-3.0",
+      "name": "GNU AGPL v3.0",
+      "family": "AGPL",
+      "version": "3.0",
+      "copyleft_strength": "network",
+      "requires_manual_review": false,
+      "spdx_ids": [
+        "AGPL-3.0",
+        "AGPL-3.0-only",
+        "AGPL-3.0-or-later",
+        "AGPL-3.0+"
+      ],
+      "names": [
+        "GNU AGPL v3.0",
+        "GNU Affero General Public License v3.0",
+        "AGPL v3",
+        "AGPL-3"
+      ],
+      "exact_urls": [],
+      "url_prefixes": [],
+      "contains": [
+        "agpl-3.0",
+        "gnu affero general public license v3.0"
+      ],
+      "color": "#9b2c2c",
+      "risk_level": "high",
+      "notice_template": "GNU AFFERO GENERAL PUBLIC LICENSE\nVersion 3, 19 November 2007\n\nCopyright (C) {{.Year}} {{.Holders}}\n\nThis program is free software: you can redistribute it and/or modify it\nunder the terms of the GNU Affero General Public License as published by the\nFree Software Foundation, either version 3 of the License, or (at your option)\nany later version.\n\nThis program is distributed in the hope that it will be useful, but WITHOUT\nANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS\nFOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for more details."
+    },
+    {
+      "key": "MPL-2.0",
+      "name": "Mozilla Public License 2.0",
+      "family": "MPL",
+      "version": "2.0",
+      "copyleft_strength": "file",
+      "requires_manual_review": false,
+      "spdx_ids": [
+        "MPL-2.0"
+      ],
+      "names": [
+        "Mozilla Public License 2.0",
+        "MPL 2"
+      ],
+      "exact_urls": [
+        "https://mozilla.org/MPL/2.0/"
+      ],
+      "url_prefixes": [],
+      "contains": [
+        "mpl-2.0"
+      ],
+      "color": "#c05621",
+      "risk_level": "medium",
+      "notice_template": "Mozilla Public License Version 2.0\n\nThis Source Code Form is subject to the terms of the Mozilla Public License,\nv. 2.0. If a copy of the MPL was not distributed with this file, You can\nobtain one at https://mozilla.org/MPL/2.0/.\n\nCovered software in this report: {{.PackageList}}"
+    },
+    {
+      "key": "CC0-1.0",
+      "name": "CC0 1.0",
+      "family": "CC0",
+      "version": "1.0",
+      "copyleft_strength": "none",
+      "requires_manual_review": false,
+      "spdx_ids": [
+        "CC0-1.0"
+      ],
+      "names": [
+        "CC0 1.0",
+        "Creative Commons Zero v1.0",
+        "CC0"
+      ],
+      "exact_urls": [],
+      "url_prefixes": [],
+      "contains": [
+        "cc0-1.0"
+      ],
+      "color": "#2f855a",
+      "risk_level": "low",
+      "notice_template": "CC0 1.0 Universal\n\nThe person who associated a work with this deed has dedicated the work to the\npublic domain by waiving all of his or her rights to the work worldwide under\ncopyright law.\n\nCovered software in this report: {{.PackageList}}"
+    },
+    {
+      "key": "0BSD",
+      "name": "BSD Zero Clause License",
+      "family": "BSD",
+      "version": "0-Clause",
+      "copyleft_strength": "none",
+      "requires_manual_review": false,
+      "spdx_ids": [
+        "0BSD"
+      ],
+      "names": [
+        "BSD Zero Clause License",
+        "Zero-Clause BSD"
+      ],
+      "exact_urls": [],
+      "url_prefixes": [],
+      "contains": [
+        "0bsd"
+      ],
+      "color": "#2f855a",
+      "risk_level": "low",
+      "notice_template": "BSD Zero Clause License\n\nCopyright (C) {{.Year}} {{.Holders}}\n\nPermission to use, copy, modify, and/or distribute this software for any\npurpose with or without fee is hereby granted.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH\nREGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY\nAND FITNESS."
+    },
+    {
+      "key": "BSL-1.0",
+      "name": "Boost Software License 1.0",
+      "family": "BSL",
+      "version": "1.0",
+      "copyleft_strength": "none",
+      "requires_manual_review": false,
+      "spdx_ids": [
+        "BSL-1.0"
+      ],
+      "names": [
+        "Boost Software License 1.0"
+      ],
+      "exact_urls": [],
+      "url_prefixes": [
+        "https://opensource.org/licenses/bsl-1.0"
+      ],
+      "contains": [
+        "bsl-1.0"
+      ],
+      "color": "#2f855a",
+      "risk_level": "low",
+      "notice_template": "Boost Software License - Version 1.0 - August 17th, 2003\n\nCopyright (c) {{.Year}} {{.Holders}}\n\nPermission is hereby granted, free of charge, to any person or organization\nobtaining a copy of the software and accompanying documentation covered by\nthis license to use, reproduce, display, distribute, execute, and transmit\nthe Software, and to prepare derivative works of the Software."
+    },
+    {
+      "key": "EPL-1.0",
+      "name": "Eclipse Public License 1.0",
+      "family": "EPL",
+      "version": "1.0",
+      "copyleft_strength": "file",
+      "requires_manual_review": false,
+      "spdx_ids": [
+        "EPL-1.0"
+      ],
+      "names": [
+        "Eclipse Public License 1.0",
+        "EPL 1.0"
+      ],
+      "exact_urls": [
+        "https://www.eclipse.org/legal/epl-v10.html"
+      ],
+      "url_prefixes": [],
+      "contains": [
+        "epl-1.0"
+      ],
+      "color": "#c05621",
+      "risk_level": "medium",
+      "notice_template": "Eclipse Public License - v 1.0\n\nThis program and the accompanying materials are made available under the\nterms of the Eclipse Public License 1.0.\n\nCovered software in this report: {{.PackageList}}"
+    },
+    {
+      "key": "EPL-2.0",
+      "name": "Eclipse Public License 2.0",
+      "family": "EPL",
+      "version": "2.0",
+      "copyleft_strength": "file",
+      "requires_manual_review": false,
+      "spdx_ids": [
+        "EPL-2.0"
+      ],
+      "names": [
+        "Eclipse Public License 2.0",
+        "EPL 2.0"
+      ],
+      "exact_urls": [
+        "https://www.eclipse.org/legal/epl-2.0/"
+      ],
+      "url_prefixes": [],
+      "contains": [
+        "epl-2.0"
+      ],
+      "color": "#c05621",
+      "risk_level": "medium",
+      "notice_template": "Eclipse Public License - v 2.0\n\nThis program and the accompanying materials are made available under the\nterms of the Eclipse Public License 2.0 which is available at\nhttps://www.eclipse.org/legal/epl-2.0/.\n\nCovered software in this report: {{.PackageList}}"
+    },
+    {
+      "key": "CDDL-1.0",
+      "name": "Common Development and Distribution License 1.0",
+      "family": "CDDL",
+      "version": "1.0",
+      "copyleft_strength": "file",
+      "requires_manual_review": false,
+      "spdx_ids": [
+        "CDDL-1.0"
+      ],
+      "names": [
+        "Common Development and Distribution License 1.0"
+      ],
+      "exact_urls": [],
+      "url_prefixes": [],
+      "contains": [
+        "cddl-1.0"
+      ],
+      "color": "#c05621",
+      "risk_level": "medium",
+      "notice_template": "COMMON DEVELOPMENT AND DISTRIBUTION LICENSE\nVersion 1.0\n\nCovered software in this report: {{.PackageList}}\nThe contents of this file are subject to the terms of the Common Development\nand Distribution License."
+    },
+    {
+      "key": "CDDL-1.1",
+      "name": "Common Development and Distribution License 1.1",
+      "family": "CDDL",
+      "version": "1.1",
+      "copyleft_strength": "file",
+      "requires_manual_review": false,
+      "spdx_ids": [
+        "CDDL-1.1"
+      ],
+      "names": [
+        "Common Development and Distribution License 1.1"
+      ],
+      "exact_urls": [],
+      "url_prefixes": [],
+      "contains": [
+        "cddl-1.1"
+      ],
+      "color": "#c05621",
+      "risk_level": "medium",
+      "notice_template": "COMMON DEVELOPMENT AND DISTRIBUTION LICENSE\nVersion 1.1\n\nCovered software in this report: {{.PackageList}}\nThe contents of this file are subject to the terms of the Common Development\nand Distribution License."
+    },
+    {
+      "key": "Zlib",
+      "name": "zlib License",
+      "family": "zlib",
+      "version": "",
+      "copyleft_strength": "none",
+      "requires_manual_review": false,
+      "spdx_ids": [
+        "Zlib"
+      ],
+      "names": [
+        "zlib License"
+      ],
+      "exact_urls": [],
+      "url_prefixes": [],
+      "contains": [
+        "zlib"
+      ],
+      "color": "#2f855a",
+      "risk_level": "low",
+      "notice_template": "zlib License\n\nCopyright (c) {{.Year}} {{.Holders}}\n\nThis software is provided 'as-is', without any express or implied warranty.\nIn no event will the authors be held liable for any damages arising from the\nuse of this software."
+    },
+    {
+      "key": "OpenSSL",
+      "name": "OpenSSL License",
+      "family": "OpenSSL",
+      "version": "",
+      "copyleft_strength": "none",
+      "requires_manual_review": false,
+      "spdx_ids": [
+        "OpenSSL"
+      ],
+      "names": [
+        "OpenSSL License",
+        "OpenSSL-standalone"
+      ],
+      "exact_urls": [],
+      "url_prefixes": [],
+      "contains": [
+        "openssl"
+      ],
+      "color": "#b7791f",
+      "risk_level": "medium",
+      "notice_template": "OpenSSL License\n\nCovered software in this report: {{.PackageList}}\nThis product includes software developed by the OpenSSL Project for use in the OpenSSL Toolkit."
+    },
+    {
+      "key": "MS-PL",
+      "name": "Microsoft Public License",
+      "family": "MS-PL",
+      "version": "",
+      "copyleft_strength": "none",
+      "requires_manual_review": false,
+      "spdx_ids": [
+        "MS-PL"
+      ],
+      "names": [
+        "Microsoft Public License"
+      ],
+      "exact_urls": [],
+      "url_prefixes": [],
+      "contains": [
+        "ms-pl",
+        "microsoft public license"
+      ],
+      "color": "#2b6cb0",
+      "risk_level": "low",
+      "notice_template": "Microsoft Public License (Ms-PL)\n\nCovered software in this report: {{.PackageList}}\nThis license governs use of the accompanying software."
+    },
+    {
+      "key": "NCSA",
+      "name": "NCSA License",
+      "family": "NCSA",
+      "version": "",
+      "copyleft_strength": "none",
+      "requires_manual_review": false,
+      "spdx_ids": [
+        "NCSA"
+      ],
+      "names": [
+        "NCSA License",
+        "University of Illinois/NCSA Open Source License"
+      ],
+      "exact_urls": [],
+      "url_prefixes": [],
+      "contains": [
+        "ncsa license"
+      ],
+      "color": "#2f855a",
+      "risk_level": "low",
+      "notice_template": "University of Illinois/NCSA Open Source License\n\nCopyright (c) {{.Year}} {{.Holders}}\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files to deal with the Software\nwithout restriction."
+    },
+    {
+      "key": "Artistic-2.0",
+      "name": "Artistic License 2.0",
+      "family": "Artistic",
+      "version": "2.0",
+      "copyleft_strength": "custom",
+      "requires_manual_review": false,
+      "spdx_ids": [
+        "Artistic-2.0"
+      ],
+      "names": [
+        "Artistic License 2.0"
+      ],
+      "exact_urls": [],
+      "url_prefixes": [],
+      "contains": [
+        "artistic-2.0"
+      ],
+      "color": "#b7791f",
+      "risk_level": "medium",
+      "notice_template": "The Artistic License 2.0\n\nCovered software in this report: {{.PackageList}}"
+    },
+    {
+      "key": "PostgreSQL",
+      "name": "PostgreSQL License",
+      "family": "PostgreSQL",
+      "version": "",
+      "copyleft_strength": "none",
+      "requires_manual_review": false,
+      "spdx_ids": [
+        "PostgreSQL"
+      ],
+      "names": [
+        "PostgreSQL License"
+      ],
+      "exact_urls": [],
+      "url_prefixes": [],
+      "contains": [
+        "postgresql license"
+      ],
+      "color": "#2f855a",
+      "risk_level": "low",
+      "notice_template": "PostgreSQL License\n\nCopyright (c) {{.Year}} {{.Holders}}\n\nPermission to use, copy, modify, and distribute this software and its\ndocumentation for any purpose, without fee, and without a written agreement is\nhereby granted."
+    },
+    {
+      "key": "PSF-2.0",
+      "name": "Python Software Foundation License 2.0",
+      "family": "PSF",
+      "version": "2.0",
+      "copyleft_strength": "none",
+      "requires_manual_review": false,
+      "spdx_ids": [
+        "PSF-2.0",
+        "Python-2.0",
+        "Python-2.0.1"
+      ],
+      "names": [
+        "Python Software Foundation License 2.0"
+      ],
+      "exact_urls": [],
+      "url_prefixes": [],
+      "contains": [
+        "psf-2.0"
+      ],
+      "color": "#2f855a",
+      "risk_level": "low",
+      "notice_template": "PYTHON SOFTWARE FOUNDATION LICENSE VERSION 2\n\nCovered software in this report: {{.PackageList}}"
+    },
+    {
+      "key": "Unlicense",
+      "name": "The Unlicense",
+      "family": "Unlicense",
+      "version": "",
+      "copyleft_strength": "none",
+      "requires_manual_review": false,
+      "spdx_ids": [
+        "Unlicense"
+      ],
+      "names": [
+        "The Unlicense"
+      ],
+      "exact_urls": [],
+      "url_prefixes": [],
+      "contains": [
+        "unlicense"
+      ],
+      "color": "#2f855a",
+      "risk_level": "low",
+      "notice_template": "This is free and unencumbered software released into the public domain.\n\nAnyone is free to copy, modify, publish, use, compile, sell, or distribute\nthis software, either in source code form or as a compiled binary, for any\npurpose, commercial or non-commercial, and by any means.\n\nCovered software in this report: {{.PackageList}}"
+    },
+    {
+      "key": "WTFPL",
+      "name": "WTFPL",
+      "family": "WTFPL",
+      "version": "2",
+      "copyleft_strength": "none",
+      "requires_manual_review": false,
+      "spdx_ids": [
+        "WTFPL"
+      ],
+      "names": [
+        "Do What The F*ck You Want To Public License"
+      ],
+      "exact_urls": [],
+      "url_prefixes": [],
+      "contains": [
+        "wtfpl"
+      ],
+      "color": "#2f855a",
+      "risk_level": "low",
+      "notice_template": "DO WHAT THE FUCK YOU WANT TO PUBLIC LICENSE\nVersion 2, December 2004\n\nCopyright (C) {{.Year}} {{.Holders}}\n\nEveryone is permitted to copy and distribute verbatim or modified copies of\nthis license document, and changing it is allowed as long as the name is\nchanged.\n\n0. You just DO WHAT THE FUCK YOU WANT TO."
+    },
+    {
+      "key": "Unknown",
+      "name": "Unknown / Custom",
+      "family": "Unknown",
+      "version": "",
+      "copyleft_strength": "unknown",
+      "requires_manual_review": true,
+      "spdx_ids": [
+        "Unknown"
+      ],
+      "names": [
+        "Unknown / Custom"
+      ],
+      "exact_urls": [],
+      "url_prefixes": [],
+      "contains": [
+        "see license",
+        "unknown",
+        "none"
+      ],
+      "color": "#718096",
+      "risk_level": "unknown",
+      "notice_template": "{{.LicenseName}}\n\nThis package requires manual review.\nPackages: {{.PackageList}}\nCopyright holders: {{.Holders}}"
+    },
+    {
+      "key": "OTHER",
+      "name": "Other License",
+      "family": "Other",
+      "version": "",
+      "copyleft_strength": "unknown",
+      "requires_manual_review": true,
+      "spdx_ids": [
+        "OTHER"
+      ],
+      "names": [
+        "Other License"
+      ],
+      "exact_urls": [],
+      "url_prefixes": [],
+      "contains": [
+        "other",
+        "custom"
+      ],
+      "color": "#718096",
+      "risk_level": "unknown",
+      "notice_template": "{{.LicenseName}}\n\nPackages: {{.PackageList}}\nThis entry uses a custom or uncommon license and should be reviewed manually."
+    }
+  ]
+}

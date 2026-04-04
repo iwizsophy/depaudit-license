@@ -1,0 +1,144 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://depaudit-license.local/configs/licenses.schema.json",
+  "title": "depaudit-license catalog",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["fallback", "licenses"],
+  "properties": {
+    "fallback": {
+      "type": "string",
+      "minLength": 1
+    },
+    "licenses": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/licenseDefinition"
+      }
+    }
+  },
+  "$defs": {
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "stringArray": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/nonEmptyString"
+      },
+      "uniqueItems": true
+    },
+    "matcherArray": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/nonEmptyString"
+      },
+      "uniqueItems": true
+    },
+    "licenseDefinition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "key",
+        "name",
+        "family",
+        "version",
+        "copyleft_strength",
+        "requires_manual_review",
+        "spdx_ids",
+        "names",
+        "exact_urls",
+        "url_prefixes",
+        "contains",
+        "color",
+        "risk_level",
+        "notice_template"
+      ],
+      "properties": {
+        "key": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "name": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "family": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "version": {
+          "type": "string"
+        },
+        "copyleft_strength": {
+          "enum": ["none", "file", "library", "strong", "network", "custom", "unknown"]
+        },
+        "requires_manual_review": {
+          "type": "boolean"
+        },
+        "spdx_ids": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "names": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "exact_urls": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "url_prefixes": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "contains": {
+          "$ref": "#/$defs/stringArray"
+        },
+        "color": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$"
+        },
+        "risk_level": {
+          "enum": ["low", "medium", "high", "unknown"]
+        },
+        "notice_template": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      },
+      "anyOf": [
+        {
+          "properties": {
+            "spdx_ids": {
+              "minItems": 1
+            }
+          }
+        },
+        {
+          "properties": {
+            "names": {
+              "minItems": 1
+            }
+          }
+        },
+        {
+          "properties": {
+            "exact_urls": {
+              "minItems": 1
+            }
+          }
+        },
+        {
+          "properties": {
+            "url_prefixes": {
+              "minItems": 1
+            }
+          }
+        },
+        {
+          "properties": {
+            "contains": {
+              "minItems": 1
+            }
+          }
+        }
+      ]
+    }
+  }
+}

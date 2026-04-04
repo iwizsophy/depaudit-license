@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>depaudit-license report</title>
+  <style>{{.ThemeCSS}}</style>
+</head>
+<body>
+  <main class="page">
+    <section class="hero">
+      <article class="hero-card hero-main">
+        <div class="eyebrow">depaudit-license</div>
+        <h1 class="hero-title">OSS license inventory and notice in one command.</h1>
+        <p class="hero-copy">
+          リポジトリ走査または SBOM をもとに依存関係を整理し、監査向けサマリーと配布向けライセンス通知を1つのHTMLに統合しています。
+          ライセンス定義は JSON、外観はテンプレートと CSS で差し替えできます。
+        </p>
+        <div class="hero-meta">
+          <div>Input: <code>{{.Root}}</code></div>
+          <div>Generated at: <code>{{.GeneratedAt}}</code></div>
+          {{if .ExcludePatterns}}
+          <div>Production exclusions: <code>{{range $index, $value := .ExcludePatterns}}{{if $index}}, {{end}}{{$value}}{{end}}</code></div>
+          {{end}}
+        </div>
+      </article>
+
+      <aside class="hero-card hero-side">
+        <div>
+          <div class="summary-label">What changed</div>
+          <div class="summary-value">1 CLI</div>
+          <div class="summary-label">scan + normalize + render</div>
+        </div>
+        <div>
+          <div class="summary-label">Customization points</div>
+          <div class="summary-value">3 files</div>
+          <div class="summary-label">catalog JSON / HTML template / CSS theme</div>
+        </div>
+      </aside>
+    </section>
+
+    <section class="summary-grid">
+      <article class="summary-card">
+        <div class="summary-label">Packages</div>
+        <div class="summary-value">{{.TotalPackages}}</div>
+        <div class="summary-label">all scanned dependencies</div>
+      </article>
+      <article class="summary-card">
+        <div class="summary-label">Production Packages</div>
+        <div class="summary-value">{{.ProductionPackages}}</div>
+        <div class="summary-label">after dev/internal filtering</div>
+      </article>
+      <article class="summary-card">
+        <div class="summary-label">License Types</div>
+        <div class="summary-value">{{.TotalLicenses}}</div>
+        <div class="summary-label">all detected categories</div>
+      </article>
+      <article class="summary-card">
+        <div class="summary-label">Production License Types</div>
+        <div class="summary-value">{{.ProductionLicenses}}</div>
+        <div class="summary-label">licenses that reach shipping output</div>
+      </article>
+    </section>
+
+    <section class="risk-grid">
+      {{range .RiskSummary}}
+      <article class="risk-pill" data-risk="{{.Level}}">
+        <h3>{{.Label}}</h3>
+        <p>{{.Count}}</p>
+      </article>
+      {{end}}
+    </section>
+
+    <section class="toolbar">
+      <input id="searchBox" type="search" placeholder="Search by package, project, or license">
+      <div>
+        <select id="ecosystemFilter" aria-label="Filter by ecosystem">
+          <option value="">All ecosystems</option>
+          {{range .Ecosystems}}
+          <option value="{{.}}">{{ecosystemLabel .}}</option>
+          {{end}}
+        </select>
+        <select id="dependencyTypeFilter" aria-label="Filter by dependency type">
+          <option value="">All dependency types</option>
+          {{range .DependencyTypes}}
+          <option value="{{.}}">{{dependencyTypeLabel .}}</option>
+          {{end}}
+        </select>
+        <button type="button" onclick="expandAll()">Expand all</button>
+        <button type="button" onclick="collapseAll()">Collapse all</button>
+      </div>
+    </section>
+
+    <section class="groups" id="groups">
+      {{range .Groups}}
+      <article class="group" data-search="{{.Name}} {{.Key}} {{range .Packages}}{{.Name}} {{.Project}} {{end}}">
+        <header class="group-header">
+          <div class="group-title-row">
+            <div class="group-title">
+              <span class="swatch" style="background: {{.Color}}"></span>
+              <h2>{{.Name}}</h2>
+            </div>
+            <div class="badge-row">
+              <span class="badge" data-risk="{{.RiskLevel}}">Risk: {{.RiskLevel}}</span>
+              <span class="badge">All packages: {{len .Packages}}</span>
+              <span class="badge">Production: {{len .ProductionPackages}}</span>
+            </div>
+          </div>
+          <p class="hero-copy">{{.Description}}</p>
+        </header>
+
+        <div class="group-body">
+          <div class="list-block">
+            <div class="meta-grid">
+              <section class="meta-card">
+                <h3>Obligations</h3>
+                <ul>{{range .Obligations}}<li>{{.}}</li>{{end}}</ul>
+              </section>
+              <section class="meta-card">
+                <h3>Permissions</h3>
+                <ul>{{range .Permissions}}<li>{{.}}</li>{{end}}</ul>
+              </section>
+              <section class="meta-card">
+                <h3>Limitations</h3>
+                <ul>{{range .Limitations}}<li>{{.}}</li>{{end}}</ul>
+              </section>
+            </div>
+
+            <div class="pkg-list">
+              {{range .Packages}}
+              <article class="pkg" data-ecosystem="{{.Ecosystem}}" data-dependency-type="{{.DependencyType}}" data-search="{{.Name}} {{.Project}} {{.DependencyType}} {{.Ecosystem}} {{.RawLicense}}">
+                <div class="pkg-name">{{.Name}}</div>
+                <div class="pkg-meta">
+                  {{.Ecosystem}} / {{.Project}} / {{.DependencyType}} / {{.Version}}
+                  {{if .CopyrightHolder}}<br>Copyright: {{.CopyrightYear}} {{.CopyrightHolder}}{{end}}
+                  {{if .RawLicense}}<br>Raw license: {{.RawLicense}}{{end}}
+                </div>
+                {{if or .Repository .Homepage}}
+                <div class="links">
+                  {{if .Repository}}<a href="{{.Repository}}" target="_blank" rel="noreferrer">Repository</a>{{end}}
+                  {{if .Homepage}}<a href="{{.Homepage}}" target="_blank" rel="noreferrer">Homepage</a>{{end}}
+                </div>
+                {{end}}
+              </article>
+              {{end}}
+            </div>
+          </div>
+
+          <aside class="notice">
+            <h3>Distribution Notice</h3>
+            {{if .NoticeText}}
+            <pre>{{.NoticeText}}</pre>
+            {{else}}
+            <pre>No production package currently maps to this license group.</pre>
+            {{end}}
+          </aside>
+        </div>
+      </article>
+      {{end}}
+    </section>
+
+    <section class="inventory">
+      <h3>Production Inventory</h3>
+      <div class="inventory-meta">
+        JSON export contains the same structure. This section is useful when you need a flat list for packaging or legal review.
+      </div>
+      <div class="inventory-grid">
+        {{range .ProductionInventory}}
+        <article class="inventory-item">
+          <strong>{{.Name}}</strong>
+          <div>{{.Ecosystem}} / {{.Project}}</div>
+          <div>{{.DependencyType}} / {{.Version}}</div>
+          <div>License: {{.LicenseKey}}</div>
+        </article>
+        {{end}}
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const groups = Array.from(document.querySelectorAll(".group"));
+    const searchBox = document.getElementById("searchBox");
+    const ecosystemFilter = document.getElementById("ecosystemFilter");
+    const dependencyTypeFilter = document.getElementById("dependencyTypeFilter");
+
+    function setCollapsed(group, collapsed) {
+      const body = group.querySelector(".group-body");
+      body.style.display = collapsed ? "none" : "grid";
+    }
+
+    function expandAll() {
+      groups.forEach(group => setCollapsed(group, false));
+    }
+
+    function collapseAll() {
+      groups.forEach(group => setCollapsed(group, true));
+    }
+
+    function applyFilters() {
+      const query = searchBox.value.trim().toLowerCase();
+      const ecosystem = ecosystemFilter.value;
+      const dependencyType = dependencyTypeFilter.value;
+
+      groups.forEach(group => {
+        const packages = Array.from(group.querySelectorAll(".pkg"));
+        let visibleCount = 0;
+
+        packages.forEach(pkg => {
+          const matchesSearch = !query || pkg.dataset.search.toLowerCase().includes(query);
+          const matchesEcosystem = !ecosystem || pkg.dataset.ecosystem === ecosystem;
+          const matchesDependencyType = !dependencyType || pkg.dataset.dependencyType === dependencyType;
+          const visible = matchesSearch && matchesEcosystem && matchesDependencyType;
+          pkg.style.display = visible ? "" : "none";
+          if (visible) {
+            visibleCount += 1;
+          }
+        });
+
+        const matchesGroupSearch = !query || group.dataset.search.toLowerCase().includes(query);
+        group.style.display = visibleCount > 0 && matchesGroupSearch ? "" : "none";
+      });
+    }
+
+    searchBox.addEventListener("input", applyFilters);
+    ecosystemFilter.addEventListener("change", applyFilters);
+    dependencyTypeFilter.addEventListener("change", applyFilters);
+  </script>
+</body>
+</html>

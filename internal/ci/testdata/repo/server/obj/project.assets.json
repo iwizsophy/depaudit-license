@@ -1,0 +1,32 @@
+{
+  "version": 3,
+  "project": {
+    "restore": {
+      "projectPath": "App.csproj"
+    },
+    "frameworks": {
+      "net8.0": {
+        "dependencies": {
+          "Newtonsoft.Json": {
+            "target": "Package",
+            "version": "[13.0.3, )"
+          }
+        }
+      }
+    }
+  },
+  "libraries": {
+    "Newtonsoft.Json/13.0.3": { "type": "package" },
+    "System.Text.Encodings.Web/8.0.0": { "type": "package" }
+  },
+  "targets": {
+    "net8.0": {
+      "Newtonsoft.Json/13.0.3": {
+        "runtime": {
+          "lib/net8.0/Newtonsoft.Json.dll": {}
+        }
+      },
+      "System.Text.Encodings.Web/8.0.0": {}
+    }
+  }
+}

@@ -1,0 +1,92 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.5",
+  "version": 1,
+  "metadata": {
+    "component": {
+      "bom-ref": "root-app",
+      "type": "application",
+      "name": "sample-app",
+      "version": "1.0.0"
+    }
+  },
+  "components": [
+    {
+      "bom-ref": "pkg:npm/react@19.2.4",
+      "type": "library",
+      "group": "facebook",
+      "name": "react",
+      "version": "19.2.4",
+      "scope": "required",
+      "purl": "pkg:npm/react@19.2.4",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "text": {
+              "content": "TUlUIExpY2Vuc2U=",
+              "contentType": "text/plain",
+              "encoding": "base64"
+            }
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/facebook/react.git"
+        },
+        {
+          "type": "website",
+          "url": "https://react.dev/"
+        }
+      ],
+      "copyright": "Copyright 2024 Meta"
+    },
+    {
+      "bom-ref": "pkg:npm/scheduler@0.26.0",
+      "type": "library",
+      "name": "scheduler",
+      "version": "0.26.0",
+      "scope": "required",
+      "purl": "pkg:npm/scheduler@0.26.0",
+      "licenses": [
+        {
+          "expression": "MIT OR Apache-2.0"
+        }
+      ]
+    },
+    {
+      "bom-ref": "pkg:npm/vite@8.0.1",
+      "type": "library",
+      "name": "vite",
+      "version": "8.0.1",
+      "scope": "optional",
+      "purl": "pkg:npm/vite@8.0.1",
+      "evidence": {
+        "licenses": [
+          {
+            "license": {
+              "name": "MIT"
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "dependencies": [
+    {
+      "ref": "root-app",
+      "dependsOn": [
+        "pkg:npm/react@19.2.4",
+        "pkg:npm/vite@8.0.1"
+      ]
+    },
+    {
+      "ref": "pkg:npm/react@19.2.4",
+      "dependsOn": [
+        "pkg:npm/scheduler@0.26.0"
+      ]
+    }
+  ]
+}

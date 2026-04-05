@@ -4,9 +4,27 @@
   <img src="docs/assets/readme-icon.png" alt="depaudit-license icon" width="320">
 </p>
 
-日本語版 README は [README.ja.md](/D:/Source/Self/license/README.ja.md) にあります.
+Japanese README is available at [README.ja.md](README.ja.md).
 
 `depaudit-license` is a Go CLI that builds OSS license inventory and distribution notice outputs from either a repository scan or an existing SBOM.
+
+## Background
+
+When building applications that rely on OSS, teams need to organize dependency license information and present it appropriately.
+
+SBOM is an effective mechanism, but in many cases it is not sufficient on its own as the final artifact presented to end users.
+
+At the same time, publishing an application often requires preparing a license page (notice) that satisfies the obligations of each OSS license, and it is important to present that information in a form people can actually understand.
+
+Existing tools can extract license information and generate SBOMs, but they do not consistently produce artifacts that are already formatted for distribution. In many cases, the final output still needs manual processing before it can be published.
+
+There is also a process problem: even though the license page is important, it is easy for this work to be postponed until late in development, which increases the risk of omissions.
+
+`depaudit-license` was built to address this by automating license compliance all the way through artifact generation.
+
+It accepts repository scans and SBOMs as inputs, merges them into a normalized inventory, and generates a distributable license page (legal notice).
+
+This makes it practical to incorporate license compliance into CI, reduce dependence on manual work, and handle it reliably and continuously over time.
 
 It can:
 

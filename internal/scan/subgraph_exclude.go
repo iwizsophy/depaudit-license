@@ -150,12 +150,15 @@ func collectUnsupportedSubgraphMatches(result Result, root string, rule policy.R
 		}
 	}
 
-	projectPathsByProject := map[string][]string{}
+	projectCandidatesByIdentity := map[string][]string{}
+	projectCandidatesByName := map[string][]string{}
 	for _, diagnostic := range result.Diagnostics {
 		if diagnostic.Code != DiagnosticCodeGraphUnavailable {
 			continue
 		}
-		projectPathsByProject[strings.TrimSpace(diagnostic.Project)] = append(projectPathsByProject[strings.TrimSpace(diagnostic.Project)], strings.TrimSpace(diagnostic.ProjectPath))
+		candidates := graphProjectCandidates(root, diagnostic.ProjectPath, diagnostic.Project)
+		projectCandidatesByIdentity[projectIdentity(diagnostic.ProjectPath, diagnostic.Project)] = append(projectCandidatesByIdentity[projectIdentity(diagnostic.ProjectPath, diagnostic.Project)], candidates...)
+		projectCandidatesByName[strings.TrimSpace(diagnostic.Project)] = append(projectCandidatesByName[strings.TrimSpace(diagnostic.Project)], candidates...)
 	}
 
 	unsupported := map[string]struct{}{}
@@ -166,10 +169,13 @@ func collectUnsupportedSubgraphMatches(result Result, root string, rule policy.R
 		if _, supported := graphRootPackages[packageIdentity(pkg)]; supported {
 			continue
 		}
-		projectCandidates := []string{pkg.Project}
-		for _, projectPath := range projectPathsByProject[strings.TrimSpace(pkg.Project)] {
-			projectCandidates = append(projectCandidates, relativeProjectPath(root, projectPath), projectPath)
+		projectCandidates := graphProjectCandidates(root, pkg.ProjectPath, pkg.Project)
+		if candidates, ok := projectCandidatesByIdentity[projectIdentity(pkg.ProjectPath, pkg.Project)]; ok {
+			projectCandidates = append(projectCandidates, candidates...)
+		} else if strings.TrimSpace(pkg.ProjectPath) == "" {
+			projectCandidates = append(projectCandidates, projectCandidatesByName[strings.TrimSpace(pkg.Project)]...)
 		}
+		projectCandidates = uniqueSubgraphStrings(projectCandidates)
 		if !policy.SelectorMatchesPackage(rule.Match, inventoryPackage(pkg), projectCandidates...) {
 			continue
 		}
@@ -182,7 +188,7 @@ func filterPackagesByGraphs(packages []Package, graphs []DependencyGraph) []Pack
 	managedProjects := map[string]struct{}{}
 	activePackages := map[string]struct{}{}
 	for _, graph := range graphs {
-		managedProjects[strings.TrimSpace(graph.Project)] = struct{}{}
+		managedProjects[projectIdentity(graph.ProjectPath, graph.Project)] = struct{}{}
 		for _, node := range graph.Nodes {
 			activePackages[packageIdentity(node.Package)] = struct{}{}
 		}
@@ -198,7 +204,7 @@ func filterPackagesByGraphs(packages []Package, graphs []DependencyGraph) []Pack
 			result = append(result, pkg)
 			continue
 		}
-		if _, managed := managedProjects[strings.TrimSpace(pkg.Project)]; !managed {
+		if _, managed := managedProjects[projectIdentity(pkg.ProjectPath, pkg.Project)]; !managed {
 			result = append(result, pkg)
 		}
 	}
@@ -317,7 +323,14 @@ func isDirectDependencyType(value string) bool {
 }
 
 func packageIdentity(pkg Package) string {
-	return strings.ToLower(strings.Join([]string{pkg.Ecosystem, pkg.Project, pkg.Name, pkg.Version}, "\x00"))
+	return strings.ToLower(strings.Join([]string{pkg.Ecosystem, projectIdentity(pkg.ProjectPath, pkg.Project), pkg.Name, pkg.Version}, "\x00"))
+}
+
+func projectIdentity(projectPath string, project string) string {
+	if strings.TrimSpace(projectPath) != "" {
+		return filepath.Clean(strings.TrimSpace(projectPath))
+	}
+	return strings.TrimSpace(project)
 }
 
 func inventoryPackage(pkg Package) inventory.Package {

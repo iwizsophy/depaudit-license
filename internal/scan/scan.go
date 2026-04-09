@@ -23,6 +23,7 @@ type Config struct {
 type Package struct {
 	Ecosystem           string `json:"ecosystem"`
 	Project             string `json:"project"`
+	ProjectPath         string `json:"-"`
 	Name                string `json:"name"`
 	Version             string `json:"version"`
 	PURL                string `json:"purl,omitempty"`
@@ -307,6 +308,7 @@ func collectDotNetPackagesFromProject(path string) ([]Package, error) {
 			packages = append(packages, Package{
 				Ecosystem:        "dotnet",
 				Project:          project,
+				ProjectPath:      path,
 				Name:             ref.Include,
 				Version:          version,
 				PURL:             mustPURL(Package{Ecosystem: "dotnet", Name: ref.Include, Version: version}),
@@ -326,7 +328,7 @@ func collectDotNetPackagesFromProject(path string) ([]Package, error) {
 func buildDotNetPackagesFromAssets(document nugetAssetsDocument) []Package {
 	packages := make([]Package, 0, len(document.Packages))
 	for _, resolved := range document.Packages {
-		packages = append(packages, buildDotNetPackage(document.ProjectName, resolved))
+		packages = append(packages, buildDotNetPackage(document.ProjectName, document.ProjectPath, resolved))
 	}
 	return packages
 }
@@ -344,7 +346,7 @@ func buildDotNetGraphFromAssets(document nugetAssetsDocument) DependencyGraph {
 	for _, resolved := range document.Packages {
 		graph.Nodes = append(graph.Nodes, DependencyGraphNode{
 			ID:      resolved.Key,
-			Package: buildDotNetPackage(document.ProjectName, resolved),
+			Package: buildDotNetPackage(document.ProjectName, document.ProjectPath, resolved),
 		})
 	}
 	for _, edge := range document.Edges {
@@ -356,7 +358,7 @@ func buildDotNetGraphFromAssets(document nugetAssetsDocument) DependencyGraph {
 	return graph
 }
 
-func buildDotNetPackage(projectName string, resolved resolvedNugetPackage) Package {
+func buildDotNetPackage(projectName string, projectPath string, resolved resolvedNugetPackage) Package {
 	dependencyType := "transitiveDependency"
 	if resolved.IsDirect {
 		dependencyType = "dependency"
@@ -365,6 +367,7 @@ func buildDotNetPackage(projectName string, resolved resolvedNugetPackage) Packa
 	return Package{
 		Ecosystem:        "dotnet",
 		Project:          projectName,
+		ProjectPath:      projectPath,
 		Name:             resolved.PackageID,
 		Version:          resolved.Version,
 		PURL:             mustPURL(Package{Ecosystem: "dotnet", Name: resolved.PackageID, Version: resolved.Version}),

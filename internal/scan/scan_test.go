@@ -73,6 +73,73 @@ snapshots:
 	}
 }
 
+func TestCollectResultIncludesDotNetDependencyGraph(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	projectDir := filepath.Join(root, "api")
+	if err := os.MkdirAll(filepath.Join(projectDir, "obj"), 0o755); err != nil {
+		t.Fatalf("mkdir obj: %v", err)
+	}
+
+	projectPath := filepath.Join(projectDir, "App.csproj")
+	if err := os.WriteFile(projectPath, []byte(`<Project />`), 0o644); err != nil {
+		t.Fatalf("write csproj: %v", err)
+	}
+	assets := `{
+  "project": {
+    "restore": { "projectPath": "` + filepath.ToSlash(projectPath) + `" },
+    "frameworks": {
+      "net8.0": { "dependencies": { "Newtonsoft.Json": {} } }
+    }
+  },
+  "libraries": {
+    "Newtonsoft.Json/13.0.3": { "type": "package" },
+    "System.Text.Encodings.Web/8.0.0": { "type": "package" }
+  },
+  "targets": {
+    "net8.0": {
+      "Newtonsoft.Json/13.0.3": {
+        "dependencies": { "System.Text.Encodings.Web": "8.0.0" },
+        "runtime": { "lib/net8.0/Newtonsoft.Json.dll": {} }
+      },
+      "System.Text.Encodings.Web/8.0.0": {}
+    }
+  }
+}`
+	if err := os.WriteFile(filepath.Join(projectDir, "obj", "project.assets.json"), []byte(assets), 0o644); err != nil {
+		t.Fatalf("write assets: %v", err)
+	}
+
+	result, err := CollectResult(Config{Root: root})
+	if err != nil {
+		t.Fatalf("collect result: %v", err)
+	}
+
+	if len(result.Packages) != 2 {
+		t.Fatalf("packages = %#v", result.Packages)
+	}
+	if len(result.Graphs) != 1 {
+		t.Fatalf("graphs = %#v", result.Graphs)
+	}
+	graph := result.Graphs[0]
+	if graph.ProjectPath != projectPath || graph.Project != "App" || graph.Ecosystem != "dotnet" {
+		t.Fatalf("graph = %#v", graph)
+	}
+	if len(graph.Roots) != 1 || graph.Roots[0] != "Newtonsoft.Json/13.0.3" {
+		t.Fatalf("graph roots = %#v", graph.Roots)
+	}
+	if len(graph.Nodes) != 2 || graph.Nodes[0].ID != "Newtonsoft.Json/13.0.3" || graph.Nodes[1].ID != "System.Text.Encodings.Web/8.0.0" {
+		t.Fatalf("graph nodes = %#v", graph.Nodes)
+	}
+	if len(graph.Edges) != 1 || graph.Edges[0].From != "Newtonsoft.Json/13.0.3" || graph.Edges[0].To != "System.Text.Encodings.Web/8.0.0" {
+		t.Fatalf("graph edges = %#v", graph.Edges)
+	}
+	if len(result.Diagnostics) != 0 {
+		t.Fatalf("diagnostics = %#v", result.Diagnostics)
+	}
+}
+
 func TestCollectUsesPackageJSONWhenNoPnpmLockExists(t *testing.T) {
 	t.Parallel()
 
@@ -171,6 +238,41 @@ func TestCollectDotNetPackagesFromProjectUsesVersionElement(t *testing.T) {
 	}
 	if packages[1].Name != "Serilog" || packages[1].Version != "3.1.0" {
 		t.Fatalf("second package = %#v", packages[1])
+	}
+}
+
+func TestCollectDotNetPackagesResultReportsGraphUnavailableOnFallback(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	projectPath := filepath.Join(root, "Fallback.csproj")
+	if err := os.WriteFile(projectPath, []byte(`<Project>
+  <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+  </ItemGroup>
+</Project>`), 0o644); err != nil {
+		t.Fatalf("write csproj: %v", err)
+	}
+
+	result, err := collectDotNetPackagesResult(projectPath)
+	if err != nil {
+		t.Fatalf("collect dotnet packages result: %v", err)
+	}
+
+	if len(result.Packages) != 1 || result.Packages[0].Name != "Newtonsoft.Json" {
+		t.Fatalf("packages = %#v", result.Packages)
+	}
+	if result.Graph != nil {
+		t.Fatalf("graph = %#v", result.Graph)
+	}
+	if len(result.Diagnostics) != 1 {
+		t.Fatalf("diagnostics = %#v", result.Diagnostics)
+	}
+	if result.Diagnostics[0].Code != DiagnosticCodeGraphUnavailable || result.Diagnostics[0].Severity != DiagnosticSeverityWarning {
+		t.Fatalf("diagnostic = %#v", result.Diagnostics[0])
+	}
+	if result.Diagnostics[0].Path != filepath.Join(root, "obj", "project.assets.json") {
+		t.Fatalf("diagnostic path = %q", result.Diagnostics[0].Path)
 	}
 }
 

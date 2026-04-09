@@ -90,7 +90,19 @@ type nodeResolver struct {
 }
 
 func Collect(cfg Config) ([]Package, error) {
-	var packages []Package
+	result, err := CollectResult(cfg)
+	if err != nil {
+		return nil, err
+	}
+	return result.Packages, nil
+}
+
+func CollectResult(cfg Config) (Result, error) {
+	result := Result{
+		Packages:    make([]Package, 0),
+		Graphs:      make([]DependencyGraph, 0),
+		Diagnostics: make([]Diagnostic, 0),
+	}
 
 	err := filepath.WalkDir(cfg.Root, func(path string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
@@ -113,13 +125,13 @@ func Collect(cfg Config) ([]Package, error) {
 			if err != nil {
 				return err
 			}
-			packages = append(packages, resolved...)
+			result.Packages = append(result.Packages, resolved...)
 		case "yarn.lock":
 			resolved, err := collectYarnPackages(path)
 			if err != nil {
 				return err
 			}
-			packages = append(packages, resolved...)
+			result.Packages = append(result.Packages, resolved...)
 		case "package.json":
 			if nearestPnpmLockfile(path, cfg.Root) != "" || nearestYarnLockfile(path, cfg.Root) != "" {
 				return nil
@@ -128,31 +140,47 @@ func Collect(cfg Config) ([]Package, error) {
 			if err != nil {
 				return err
 			}
-			packages = append(packages, resolved...)
+			result.Packages = append(result.Packages, resolved...)
 		default:
 			if strings.HasSuffix(path, ".csproj") {
-				resolved, err := collectDotNetPackages(path)
+				resolved, err := collectDotNetPackagesResult(path)
 				if err != nil {
 					return err
 				}
-				packages = append(packages, resolved...)
+				result.Packages = append(result.Packages, resolved.Packages...)
+				if resolved.Graph != nil {
+					result.Graphs = append(result.Graphs, *resolved.Graph)
+				}
+				result.Diagnostics = append(result.Diagnostics, resolved.Diagnostics...)
 			}
 		}
 
 		return nil
 	})
 	if err != nil {
-		return nil, err
+		return Result{}, err
 	}
 
-	sort.Slice(packages, func(i, j int) bool {
-		left := packages[i]
-		right := packages[j]
+	sort.Slice(result.Packages, func(i, j int) bool {
+		left := result.Packages[i]
+		right := result.Packages[j]
 		return strings.Join([]string{left.Ecosystem, left.Project, left.Name, left.Version}, "\x00") <
 			strings.Join([]string{right.Ecosystem, right.Project, right.Name, right.Version}, "\x00")
 	})
+	sort.Slice(result.Graphs, func(i, j int) bool {
+		left := result.Graphs[i]
+		right := result.Graphs[j]
+		return strings.Join([]string{left.Ecosystem, left.ProjectPath, left.Project}, "\x00") <
+			strings.Join([]string{right.Ecosystem, right.ProjectPath, right.Project}, "\x00")
+	})
+	sort.Slice(result.Diagnostics, func(i, j int) bool {
+		left := result.Diagnostics[i]
+		right := result.Diagnostics[j]
+		return strings.Join([]string{left.Code, left.Path, left.Message}, "\x00") <
+			strings.Join([]string{right.Code, right.Path, right.Message}, "\x00")
+	})
 
-	return packages, nil
+	return result, nil
 }
 
 func collectNodePackages(path string) ([]Package, error) {
@@ -205,16 +233,46 @@ func buildNodePackages(project string, deps map[string]string, depType string) [
 }
 
 func collectDotNetPackages(path string) ([]Package, error) {
+	result, err := collectDotNetPackagesResult(path)
+	if err != nil {
+		return nil, err
+	}
+	return result.Packages, nil
+}
+
+type dotNetPackageCollection struct {
+	Packages    []Package
+	Graph       *DependencyGraph
+	Diagnostics []Diagnostic
+}
+
+func collectDotNetPackagesResult(path string) (dotNetPackageCollection, error) {
 	assetsPath := filepath.Join(filepath.Dir(path), "obj", "project.assets.json")
 	if _, err := os.Stat(assetsPath); err == nil {
 		document, err := readNugetAssets(assetsPath)
 		if err != nil {
-			return nil, err
+			return dotNetPackageCollection{}, err
 		}
-		return buildDotNetPackagesFromAssets(document), nil
+		graph := buildDotNetGraphFromAssets(document)
+		return dotNetPackageCollection{
+			Packages: buildDotNetPackagesFromAssets(document),
+			Graph:    &graph,
+		}, nil
 	}
 
-	return collectDotNetPackagesFromProject(path)
+	packages, err := collectDotNetPackagesFromProject(path)
+	if err != nil {
+		return dotNetPackageCollection{}, err
+	}
+	return dotNetPackageCollection{
+		Packages: packages,
+		Diagnostics: []Diagnostic{{
+			Code:     DiagnosticCodeGraphUnavailable,
+			Severity: DiagnosticSeverityWarning,
+			Message:  "project.assets.json not found; dependency graph unavailable for fallback PackageReference scan",
+			Path:     assetsPath,
+		}},
+	}, nil
 }
 
 func collectDotNetPackagesFromProject(path string) ([]Package, error) {
@@ -265,22 +323,51 @@ func collectDotNetPackagesFromProject(path string) ([]Package, error) {
 func buildDotNetPackagesFromAssets(document nugetAssetsDocument) []Package {
 	packages := make([]Package, 0, len(document.Packages))
 	for _, resolved := range document.Packages {
-		dependencyType := "transitiveDependency"
-		if resolved.IsDirect {
-			dependencyType = "dependency"
-		}
-
-		packages = append(packages, Package{
-			Ecosystem:        "dotnet",
-			Project:          document.ProjectName,
-			Name:             resolved.PackageID,
-			Version:          resolved.Version,
-			PURL:             mustPURL(Package{Ecosystem: "dotnet", Name: resolved.PackageID, Version: resolved.Version}),
-			DependencyType:   dependencyType,
-			HasRuntimeAssets: resolved.HasRuntimeAssets,
-		})
+		packages = append(packages, buildDotNetPackage(document.ProjectName, resolved))
 	}
 	return packages
+}
+
+func buildDotNetGraphFromAssets(document nugetAssetsDocument) DependencyGraph {
+	graph := DependencyGraph{
+		Ecosystem:   "dotnet",
+		Project:     document.ProjectName,
+		ProjectPath: document.ProjectPath,
+		Roots:       append([]string(nil), document.Roots...),
+		Nodes:       make([]DependencyGraphNode, 0, len(document.Packages)),
+		Edges:       make([]DependencyGraphEdge, 0, len(document.Edges)),
+	}
+
+	for _, resolved := range document.Packages {
+		graph.Nodes = append(graph.Nodes, DependencyGraphNode{
+			ID:      resolved.Key,
+			Package: buildDotNetPackage(document.ProjectName, resolved),
+		})
+	}
+	for _, edge := range document.Edges {
+		graph.Edges = append(graph.Edges, DependencyGraphEdge{
+			From: edge.From,
+			To:   edge.To,
+		})
+	}
+	return graph
+}
+
+func buildDotNetPackage(projectName string, resolved resolvedNugetPackage) Package {
+	dependencyType := "transitiveDependency"
+	if resolved.IsDirect {
+		dependencyType = "dependency"
+	}
+
+	return Package{
+		Ecosystem:        "dotnet",
+		Project:          projectName,
+		Name:             resolved.PackageID,
+		Version:          resolved.Version,
+		PURL:             mustPURL(Package{Ecosystem: "dotnet", Name: resolved.PackageID, Version: resolved.Version}),
+		DependencyType:   dependencyType,
+		HasRuntimeAssets: resolved.HasRuntimeAssets,
+	}
 }
 
 func (r *nodeResolver) resolveFromInstalledPackage(packageName string, version string, projectDir string) (metadata, bool) {

@@ -81,6 +81,90 @@ func TestReadNugetAssetsParsesResolvedPackages(t *testing.T) {
 	}
 }
 
+func TestReadNugetAssetsBuildsDependencyGraph(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	projectDir := filepath.Join(dir, "Analyzer")
+	if err := os.MkdirAll(filepath.Join(projectDir, "obj"), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	projectPath := filepath.Join(projectDir, "Analyzer.csproj")
+	if err := os.WriteFile(projectPath, []byte("<Project />"), 0o644); err != nil {
+		t.Fatalf("write project: %v", err)
+	}
+
+	assets := `{
+  "version": 3,
+  "project": {
+    "restore": {
+      "projectPath": "` + filepath.ToSlash(projectPath) + `"
+    },
+    "frameworks": {
+      "net8.0": {
+        "dependencies": {
+          "Analyzer.Core": {
+            "target": "Package",
+            "version": "[1.0.0, )"
+          }
+        }
+      }
+    }
+  },
+  "libraries": {
+    "Analyzer.Core/1.0.0": { "type": "package" },
+    "Shared.Lib/2.0.0": { "type": "package" },
+    "Utility/3.0.0": { "type": "package" }
+  },
+  "targets": {
+    "net8.0": {
+      "Analyzer.Core/1.0.0": {
+        "dependencies": {
+          "Shared.Lib": "2.0.0",
+          "Utility": "3.0.0"
+        }
+      },
+      "Shared.Lib/2.0.0": {
+        "dependencies": {
+          "Utility": "3.0.0"
+        },
+        "runtime": {
+          "lib/net8.0/Shared.Lib.dll": {}
+        }
+      },
+      "Utility/3.0.0": {}
+    }
+  }
+}`
+	assetsPath := filepath.Join(projectDir, "obj", "project.assets.json")
+	if err := os.WriteFile(assetsPath, []byte(assets), 0o644); err != nil {
+		t.Fatalf("write assets: %v", err)
+	}
+
+	document, err := readNugetAssets(assetsPath)
+	if err != nil {
+		t.Fatalf("read assets: %v", err)
+	}
+
+	if len(document.Roots) != 1 || document.Roots[0] != "Analyzer.Core/1.0.0" {
+		t.Fatalf("roots = %#v", document.Roots)
+	}
+	wantEdges := []nugetPackageEdge{
+		{From: "Analyzer.Core/1.0.0", To: "Shared.Lib/2.0.0"},
+		{From: "Analyzer.Core/1.0.0", To: "Utility/3.0.0"},
+		{From: "Shared.Lib/2.0.0", To: "Utility/3.0.0"},
+	}
+	if len(document.Edges) != len(wantEdges) {
+		t.Fatalf("edges = %#v", document.Edges)
+	}
+	for index, edge := range wantEdges {
+		if document.Edges[index] != edge {
+			t.Fatalf("edge[%d] = %#v, want %#v", index, document.Edges[index], edge)
+		}
+	}
+}
+
 func TestReadNugetAssetsErrorBranchesAndConfiguredProjectPath(t *testing.T) {
 	t.Parallel()
 
@@ -337,6 +421,7 @@ func TestNugetAssetsRuntimeAndResolvedPackageHelpers(t *testing.T) {
 			},
 		},
 		Targets: map[string]map[string]struct {
+			Dependencies   map[string]any `json:"dependencies"`
 			Runtime        map[string]any `json:"runtime"`
 			Native         map[string]any `json:"native"`
 			RuntimeTargets map[string]any `json:"runtimeTargets"`

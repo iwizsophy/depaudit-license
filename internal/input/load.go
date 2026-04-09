@@ -78,7 +78,7 @@ func loadSource(cfg LoadConfig, source SourceSpec, index int) (inventory.Documen
 	}
 	switch strings.TrimSpace(source.Kind) {
 	case InputKindRepositoryScan:
-		packages, err := scan.Collect(scan.Config{
+		scanResult, err := scan.CollectResult(scan.Config{
 			Root: source.Location,
 		})
 		if err != nil {
@@ -86,7 +86,7 @@ func loadSource(cfg LoadConfig, source SourceSpec, index int) (inventory.Documen
 		}
 		return merge.SingleSourceDocument(
 			merge.NewSource(id, InputKindRepositoryScan, source.Location, sourceDisplayLocation(source)),
-			scan.ToInventory(packages),
+			scan.ToInventory(scanResult.Packages),
 		), sourceDisplayLocation(source), nil
 	case InputKindCycloneDXJSON:
 		packages, err := sbom.LoadCycloneDXJSON(source.Location, cfg.Catalog)

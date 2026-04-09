@@ -26,21 +26,22 @@ type Config struct {
 }
 
 type View struct {
-	GeneratedAt         string                `json:"generatedAt"`
-	Root                string                `json:"root"`
-	TotalPackages       int                   `json:"totalPackages"`
-	ProductionPackages  int                   `json:"productionPackages"`
-	TotalLicenses       int                   `json:"totalLicenses"`
-	ProductionLicenses  int                   `json:"productionLicenses"`
-	Ecosystems          []string              `json:"ecosystems"`
-	DependencyTypes     []string              `json:"dependencyTypes"`
-	ExcludePatterns     []string              `json:"excludePatterns,omitempty"`
-	RiskSummary         []RiskStat            `json:"riskSummary"`
-	Groups              []LicenseGroup        `json:"groups"`
-	Packages            []inventory.Package   `json:"packages"`
-	ProductionInventory []inventory.Package   `json:"productionInventory"`
-	ExcludedPackages    []ExcludedPackage     `json:"excludedPackages,omitempty"`
-	LegalNoticeEvidence []LegalNoticeEvidence `json:"legalNoticeEvidence,omitempty"`
+	GeneratedAt         string                 `json:"generatedAt"`
+	Root                string                 `json:"root"`
+	TotalPackages       int                    `json:"totalPackages"`
+	ProductionPackages  int                    `json:"productionPackages"`
+	TotalLicenses       int                    `json:"totalLicenses"`
+	ProductionLicenses  int                    `json:"productionLicenses"`
+	Ecosystems          []string               `json:"ecosystems"`
+	DependencyTypes     []string               `json:"dependencyTypes"`
+	ExcludePatterns     []string               `json:"excludePatterns,omitempty"`
+	RiskSummary         []RiskStat             `json:"riskSummary"`
+	Groups              []LicenseGroup         `json:"groups"`
+	Packages            []inventory.Package    `json:"packages"`
+	ProductionInventory []inventory.Package    `json:"productionInventory"`
+	ExcludedPackages    []ExcludedPackage      `json:"excludedPackages,omitempty"`
+	Diagnostics         []inventory.Diagnostic `json:"diagnostics,omitempty"`
+	LegalNoticeEvidence []LegalNoticeEvidence  `json:"legalNoticeEvidence,omitempty"`
 }
 
 type RiskStat struct {
@@ -157,8 +158,23 @@ func BuildDocument(cfg Config, doc inventory.Document, cat *catalog.Catalog) Vie
 		Packages:            visiblePackages,
 		ProductionInventory: productionPackages,
 		ExcludedPackages:    excludedPackages,
+		Diagnostics:         cloneDiagnostics(doc.Diagnostics),
 		LegalNoticeEvidence: buildLegalNoticeEvidence(allGroups, productionPackages),
 	}
+}
+
+func cloneDiagnostics(values []inventory.Diagnostic) []inventory.Diagnostic {
+	if len(values) == 0 {
+		return nil
+	}
+	result := make([]inventory.Diagnostic, len(values))
+	for index, diagnostic := range values {
+		result[index] = diagnostic
+		result[index].MatchedRoots = append([]string(nil), diagnostic.MatchedRoots...)
+		result[index].RemovedPackages = append([]string(nil), diagnostic.RemovedPackages...)
+		result[index].PreservedPackages = append([]string(nil), diagnostic.PreservedPackages...)
+	}
+	return result
 }
 
 func RenderHTML(view View, templatePath string, cssPath string) ([]byte, error) {
@@ -281,31 +297,7 @@ func matchShallowRule(pkg inventory.Package, rules []policy.Rule) (policy.Rule, 
 }
 
 func selectorMatchesPackage(selector policy.Selector, pkg inventory.Package) bool {
-	if len(selector.Ecosystems) > 0 && !containsNormalized(selector.Ecosystems, pkg.Ecosystem) {
-		return false
-	}
-	if len(selector.Names) > 0 && !containsNormalized(selector.Names, pkg.Name) {
-		return false
-	}
-	if len(selector.NameGlobs) > 0 && !matchesAnyGlob(selector.NameGlobs, pkg.Name) {
-		return false
-	}
-	if len(selector.Versions) > 0 && !containsTrimmed(selector.Versions, pkg.Version) {
-		return false
-	}
-	if len(selector.Projects) > 0 && !containsTrimmed(selector.Projects, pkg.Project) {
-		return false
-	}
-	if len(selector.DependencyTypes) > 0 && !containsNormalized(selector.DependencyTypes, pkg.DependencyType) {
-		return false
-	}
-	if selector.HasRuntimeAssets != nil && pkg.HasRuntimeAssets != *selector.HasRuntimeAssets {
-		return false
-	}
-	if len(selector.PURLs) > 0 && !containsTrimmed(selector.PURLs, pkg.PURL) {
-		return false
-	}
-	return true
+	return policy.SelectorMatchesPackage(selector, pkg)
 }
 
 func containsNormalized(values []string, candidate string) bool {

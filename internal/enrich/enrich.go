@@ -56,9 +56,10 @@ func Apply(cfg Config, doc inventory.Document) (inventory.Document, error) {
 
 func cloneDocument(doc inventory.Document) inventory.Document {
 	return inventory.Document{
-		Sources:   append([]inventory.Source(nil), doc.Sources...),
-		Packages:  clonePackages(doc.Packages),
-		Conflicts: cloneConflicts(doc.Conflicts),
+		Sources:     append([]inventory.Source(nil), doc.Sources...),
+		Packages:    clonePackages(doc.Packages),
+		Conflicts:   cloneConflicts(doc.Conflicts),
+		Diagnostics: cloneDiagnostics(doc.Diagnostics),
 	}
 }
 
@@ -89,6 +90,20 @@ func cloneConflicts(conflicts []inventory.Conflict) []inventory.Conflict {
 	for index, conflict := range conflicts {
 		cloned[index] = conflict
 		cloned[index].Values = append([]inventory.ConflictValue(nil), conflict.Values...)
+	}
+	return cloned
+}
+
+func cloneDiagnostics(diagnostics []inventory.Diagnostic) []inventory.Diagnostic {
+	if len(diagnostics) == 0 {
+		return nil
+	}
+	cloned := make([]inventory.Diagnostic, len(diagnostics))
+	for index, diagnostic := range diagnostics {
+		cloned[index] = diagnostic
+		cloned[index].MatchedRoots = append([]string(nil), diagnostic.MatchedRoots...)
+		cloned[index].RemovedPackages = append([]string(nil), diagnostic.RemovedPackages...)
+		cloned[index].PreservedPackages = append([]string(nil), diagnostic.PreservedPackages...)
 	}
 	return cloned
 }

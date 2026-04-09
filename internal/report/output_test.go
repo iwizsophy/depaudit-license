@@ -156,3 +156,29 @@ func TestBuildOutputPreservesExcludedPackageDiagnostics(t *testing.T) {
 		t.Fatalf("unexpected excluded package diagnostic = %#v", output.Report.ExcludedPackages[0])
 	}
 }
+
+func TestBuildOutputPreservesDiagnostics(t *testing.T) {
+	t.Parallel()
+
+	view := View{
+		Diagnostics: []inventory.Diagnostic{{
+			SourceID:          "repo-scan",
+			RuleID:            "omit-analyzer-subgraph",
+			Code:              "subgraph-exclude-applied",
+			Severity:          "info",
+			Message:           "subgraph exclude applied",
+			ProjectPath:       "src/server/App.csproj",
+			MatchedRoots:      []string{"Analyzer.Core/1.0.0"},
+			RemovedPackages:   []string{"Analyzer.Core/1.0.0", "Build.Helper/1.0.0"},
+			PreservedPackages: []string{"Runtime.Core/2.0.0", "Shared.Lib/1.0.0"},
+		}},
+	}
+
+	output := BuildOutput(view, OutputConfig{})
+	if len(output.Report.Diagnostics) != 1 {
+		t.Fatalf("diagnostics = %#v", output.Report.Diagnostics)
+	}
+	if output.Report.Diagnostics[0].RuleID != "omit-analyzer-subgraph" || output.Report.Diagnostics[0].ProjectPath != "src/server/App.csproj" {
+		t.Fatalf("unexpected diagnostic = %#v", output.Report.Diagnostics[0])
+	}
+}

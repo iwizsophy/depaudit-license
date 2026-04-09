@@ -1,5 +1,7 @@
 package scan
 
+import "depaudit-license/internal/inventory"
+
 const (
 	DiagnosticSeverityWarning      = "warning"
 	DiagnosticCodeGraphUnavailable = "dependency-graph-unavailable"
@@ -8,9 +10,9 @@ const (
 // Result is the source-local repository-scan result before inventory merge.
 // It keeps package graph data and diagnostics alongside the flattened packages.
 type Result struct {
-	Packages    []Package         `json:"packages"`
-	Graphs      []DependencyGraph `json:"graphs,omitempty"`
-	Diagnostics []Diagnostic      `json:"diagnostics,omitempty"`
+	Packages    []Package              `json:"packages"`
+	Graphs      []DependencyGraph      `json:"graphs,omitempty"`
+	Diagnostics []inventory.Diagnostic `json:"diagnostics,omitempty"`
 }
 
 type DependencyGraph struct {
@@ -30,11 +32,4 @@ type DependencyGraphNode struct {
 type DependencyGraphEdge struct {
 	From string `json:"from"`
 	To   string `json:"to"`
-}
-
-type Diagnostic struct {
-	Code     string `json:"code"`
-	Severity string `json:"severity"`
-	Message  string `json:"message"`
-	Path     string `json:"path,omitempty"`
 }

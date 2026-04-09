@@ -9,6 +9,7 @@ import (
 	"depaudit-license/internal/catalog"
 	"depaudit-license/internal/enrich"
 	"depaudit-license/internal/inventory"
+	"depaudit-license/internal/policy"
 )
 
 func repoScanFixtureRoot() string {
@@ -281,6 +282,102 @@ func TestLoadRejectsMergedDocumentWithDuplicateSourceIDs(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected duplicate source id validation error")
 	}
+}
+
+func TestLoadRepositoryScanAppliesSubgraphExcludeBeforeMerge(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	projectDir := filepath.Join(root, "src", "server")
+	if err := os.MkdirAll(filepath.Join(projectDir, "obj"), 0o755); err != nil {
+		t.Fatalf("mkdir obj: %v", err)
+	}
+
+	projectPath := filepath.Join(projectDir, "App.csproj")
+	if err := os.WriteFile(projectPath, []byte(`<Project />`), 0o644); err != nil {
+		t.Fatalf("write csproj: %v", err)
+	}
+	assets := `{
+  "project": {
+    "restore": { "projectPath": "` + filepath.ToSlash(projectPath) + `" },
+    "frameworks": {
+      "net8.0": {
+        "dependencies": {
+          "Analyzer.Core": {},
+          "Runtime.Core": {}
+        }
+      }
+    }
+  },
+  "libraries": {
+    "Analyzer.Core/1.0.0": { "type": "package" },
+    "Build.Helper/1.0.0": { "type": "package" },
+    "Runtime.Core/2.0.0": { "type": "package" },
+    "Shared.Lib/1.0.0": { "type": "package" }
+  },
+  "targets": {
+    "net8.0": {
+      "Analyzer.Core/1.0.0": {
+        "dependencies": {
+          "Build.Helper": "1.0.0",
+          "Shared.Lib": "1.0.0"
+        }
+      },
+      "Build.Helper/1.0.0": {},
+      "Runtime.Core/2.0.0": {
+        "dependencies": {
+          "Shared.Lib": "1.0.0"
+        },
+        "runtime": {
+          "lib/net8.0/Runtime.Core.dll": {}
+        }
+      },
+      "Shared.Lib/1.0.0": {
+        "runtime": {
+          "lib/net8.0/Shared.Lib.dll": {}
+        }
+      }
+    }
+  }
+}`
+	if err := os.WriteFile(filepath.Join(projectDir, "obj", "project.assets.json"), []byte(assets), 0o644); err != nil {
+		t.Fatalf("write assets: %v", err)
+	}
+
+	result, err := Load(LoadConfig{
+		Sources: []SourceSpec{{
+			ID:       "repo-scan",
+			Kind:     InputKindRepositoryScan,
+			Location: root,
+		}},
+		SubgraphRules: []policy.Rule{{
+			ID: "omit-analyzer-subgraph",
+			Match: policy.Selector{
+				Ecosystems:       []string{"nuget"},
+				Projects:         []string{"src/server/App.csproj"},
+				Names:            []string{"Analyzer.Core"},
+				HasRuntimeAssets: boolPointer(false),
+			},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("Load repository-scan with subgraph exclude: %v", err)
+	}
+
+	gotNames := make([]string, 0, len(result.Document.Packages))
+	for _, pkg := range result.Document.Packages {
+		gotNames = append(gotNames, pkg.Name)
+	}
+	if !slices.Equal(gotNames, []string{"Runtime.Core", "Shared.Lib"}) {
+		t.Fatalf("packages = %#v", result.Document.Packages)
+	}
+	if len(result.Document.Diagnostics) != 1 || result.Document.Diagnostics[0].Code != "subgraph-exclude-applied" {
+		t.Fatalf("diagnostics = %#v", result.Document.Diagnostics)
+	}
+}
+
+func boolPointer(value bool) *bool {
+	return &value
 }
 
 func findPackage(t *testing.T, packages []inventory.Package, name string) inventory.Package {

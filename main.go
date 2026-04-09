@@ -132,9 +132,10 @@ func run(args []string, stdout io.Writer) error {
 	}
 
 	inputResult, err := input.Load(input.LoadConfig{
-		Sources: cfg.inputs,
-		Client:  client,
-		Catalog: cat,
+		Sources:       cfg.inputs,
+		Client:        client,
+		Catalog:       cat,
+		SubgraphRules: cfg.excludePolicy.SubgraphExcludes,
 	})
 	if err != nil {
 		return err

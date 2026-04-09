@@ -101,7 +101,7 @@ func CollectResult(cfg Config) (Result, error) {
 	result := Result{
 		Packages:    make([]Package, 0),
 		Graphs:      make([]DependencyGraph, 0),
-		Diagnostics: make([]Diagnostic, 0),
+		Diagnostics: make([]inventory.Diagnostic, 0),
 	}
 
 	err := filepath.WalkDir(cfg.Root, func(path string, entry fs.DirEntry, walkErr error) error {
@@ -243,7 +243,7 @@ func collectDotNetPackages(path string) ([]Package, error) {
 type dotNetPackageCollection struct {
 	Packages    []Package
 	Graph       *DependencyGraph
-	Diagnostics []Diagnostic
+	Diagnostics []inventory.Diagnostic
 }
 
 func collectDotNetPackagesResult(path string) (dotNetPackageCollection, error) {
@@ -266,11 +266,14 @@ func collectDotNetPackagesResult(path string) (dotNetPackageCollection, error) {
 	}
 	return dotNetPackageCollection{
 		Packages: packages,
-		Diagnostics: []Diagnostic{{
-			Code:     DiagnosticCodeGraphUnavailable,
-			Severity: DiagnosticSeverityWarning,
-			Message:  "project.assets.json not found; dependency graph unavailable for fallback PackageReference scan",
-			Path:     assetsPath,
+		Diagnostics: []inventory.Diagnostic{{
+			Code:        DiagnosticCodeGraphUnavailable,
+			Severity:    DiagnosticSeverityWarning,
+			Message:     "project.assets.json not found; dependency graph unavailable for fallback PackageReference scan",
+			Path:        assetsPath,
+			Ecosystem:   "dotnet",
+			Project:     strings.TrimSuffix(filepath.Base(path), filepath.Ext(path)),
+			ProjectPath: path,
 		}},
 	}, nil
 }

@@ -3,9 +3,10 @@ package inventory
 // Document is the canonical inventory model shared between importers, merge
 // engines, and report rendering.
 type Document struct {
-	Sources   []Source   `json:"sources,omitempty"`
-	Packages  []Package  `json:"packages"`
-	Conflicts []Conflict `json:"conflicts,omitempty"`
+	Sources     []Source     `json:"sources,omitempty"`
+	Packages    []Package    `json:"packages"`
+	Conflicts   []Conflict   `json:"conflicts,omitempty"`
+	Diagnostics []Diagnostic `json:"diagnostics,omitempty"`
 }
 
 type Source struct {
@@ -24,6 +25,21 @@ type Conflict struct {
 type ConflictValue struct {
 	SourceID string `json:"sourceId"`
 	Value    string `json:"value"`
+}
+
+type Diagnostic struct {
+	SourceID          string   `json:"sourceId,omitempty"`
+	RuleID            string   `json:"ruleId,omitempty"`
+	Code              string   `json:"code"`
+	Severity          string   `json:"severity"`
+	Message           string   `json:"message"`
+	Path              string   `json:"path,omitempty"`
+	Ecosystem         string   `json:"ecosystem,omitempty"`
+	Project           string   `json:"project,omitempty"`
+	ProjectPath       string   `json:"projectPath,omitempty"`
+	MatchedRoots      []string `json:"matchedRoots,omitempty"`
+	RemovedPackages   []string `json:"removedPackages,omitempty"`
+	PreservedPackages []string `json:"preservedPackages,omitempty"`
 }
 
 // Package is the canonical report input model shared by repository scanners and

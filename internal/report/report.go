@@ -300,37 +300,6 @@ func selectorMatchesPackage(selector policy.Selector, pkg inventory.Package) boo
 	return policy.SelectorMatchesPackage(selector, pkg)
 }
 
-func containsNormalized(values []string, candidate string) bool {
-	normalizedCandidate := strings.ToLower(strings.TrimSpace(candidate))
-	for _, value := range values {
-		if strings.ToLower(strings.TrimSpace(value)) == normalizedCandidate {
-			return true
-		}
-	}
-	return false
-}
-
-func containsTrimmed(values []string, candidate string) bool {
-	trimmedCandidate := strings.TrimSpace(candidate)
-	for _, value := range values {
-		if strings.TrimSpace(value) == trimmedCandidate {
-			return true
-		}
-	}
-	return false
-}
-
-func matchesAnyGlob(globs []string, candidate string) bool {
-	normalizedCandidate := strings.ToLower(strings.TrimSpace(candidate))
-	for _, glob := range globs {
-		ok, err := filepath.Match(strings.ToLower(strings.TrimSpace(glob)), normalizedCandidate)
-		if err == nil && ok {
-			return true
-		}
-	}
-	return false
-}
-
 func buildGroups(allPackages []inventory.Package, productionPackages []inventory.Package, cat *catalog.Catalog) []LicenseGroup {
 	groupByKey := map[string]*LicenseGroup{}
 

@@ -6,7 +6,7 @@
       "reason": "exclude test-only packages from rendered outputs",
       "match": {
         "ecosystems": ["npm", "nuget"],
-        "dependencyTypes": ["development"],
+        "dependencyTypes": ["devDependency", "devTransitiveDependency"],
         "nameGlobs": ["eslint*", "xunit*"]
       }
     }

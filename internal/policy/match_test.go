@@ -79,8 +79,11 @@ func TestPolicyMatchHelpersCoverAliasAndFallbackBranches(t *testing.T) {
 	if !matchesAnyGlob([]string{"analyzer*"}, "Analyzer.Core") {
 		t.Fatal("expected glob match")
 	}
+	if !matchesAnyGlob([]string{"*pkg*"}, "@scope/pkg") {
+		t.Fatal("expected scoped package glob match")
+	}
 	if matchesAnyGlob([]string{"["}, "Analyzer.Core") {
-		t.Fatal("expected invalid glob to be ignored")
+		t.Fatal("expected escaped glob to not match")
 	}
 }
 

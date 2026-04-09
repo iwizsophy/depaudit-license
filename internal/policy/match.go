@@ -1,7 +1,7 @@
 package policy
 
 import (
-	"path/filepath"
+	"regexp"
 	"strings"
 
 	"depaudit-license/internal/inventory"
@@ -95,10 +95,27 @@ func containsTrimmed(values []string, candidate string) bool {
 func matchesAnyGlob(globs []string, candidate string) bool {
 	normalizedCandidate := strings.ToLower(strings.TrimSpace(candidate))
 	for _, glob := range globs {
-		ok, err := filepath.Match(strings.ToLower(strings.TrimSpace(glob)), normalizedCandidate)
-		if err == nil && ok {
+		pattern, err := globPattern(strings.ToLower(strings.TrimSpace(glob)))
+		if err == nil && pattern.MatchString(normalizedCandidate) {
 			return true
 		}
 	}
 	return false
+}
+
+func globPattern(value string) (*regexp.Regexp, error) {
+	var builder strings.Builder
+	builder.WriteString("^")
+	for _, ch := range value {
+		switch ch {
+		case '*':
+			builder.WriteString(".*")
+		case '?':
+			builder.WriteString(".")
+		default:
+			builder.WriteString(regexp.QuoteMeta(string(ch)))
+		}
+	}
+	builder.WriteString("$")
+	return regexp.Compile(builder.String())
 }

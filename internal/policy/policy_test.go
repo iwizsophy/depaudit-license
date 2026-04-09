@@ -27,7 +27,7 @@ func TestParseAcceptsValidPolicy(t *testing.T) {
       "onUnsupported": "warn",
       "match": {
         "projects": ["src/server/App.csproj"],
-        "dependencyTypes": ["development"],
+        "dependencyTypes": ["devDependency"],
         "hasRuntimeAssets": false
       }
     }

@@ -87,6 +87,45 @@ func TestLicenseTextBundleSchemaRejectsBrokenDefinition(t *testing.T) {
 	}
 }
 
+func TestExcludePolicySampleMatchesSchema(t *testing.T) {
+	t.Parallel()
+
+	schema := mustCompileSchema(t, "exclude-policy.schema.json")
+	doc := mustReadJSON(t, "exclude-policy.sample.json")
+
+	if err := schema.Validate(doc); err != nil {
+		t.Fatalf("validate exclude-policy.sample.json: %v", err)
+	}
+}
+
+func TestExcludePolicySchemaRejectsBrokenSelector(t *testing.T) {
+	t.Parallel()
+
+	schema := mustCompileSchema(t, "exclude-policy.schema.json")
+	doc := mustReadJSON(t, "exclude-policy.sample.json")
+
+	root, ok := doc.(map[string]any)
+	if !ok {
+		t.Fatalf("unexpected root type %T", doc)
+	}
+
+	shallowRules, ok := root["shallowExcludes"].([]any)
+	if !ok || len(shallowRules) == 0 {
+		t.Fatalf("unexpected shallowExcludes payload")
+	}
+
+	first, ok := shallowRules[0].(map[string]any)
+	if !ok {
+		t.Fatalf("unexpected shallow rule type %T", shallowRules[0])
+	}
+
+	delete(first, "match")
+
+	if err := schema.Validate(doc); err == nil {
+		t.Fatalf("expected schema validation to fail")
+	}
+}
+
 func mustCompileSchema(t *testing.T, name string) *jsonschema.Schema {
 	t.Helper()
 

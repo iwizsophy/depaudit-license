@@ -146,6 +146,8 @@ License definitions and descriptions:
 - later `-license-catalog` values override earlier sources
 - `-locale` selects `configs/license-texts.<locale>.json`
 - `-license-text-bundle` overrides locale-based bundle resolution
+- `-exclude-policy` loads versioned shallow/subgraph exclude policy JSON
+- `-exclude-patterns` remains supported and is internally synthesized as a legacy shallow rule
 
 Presentation:
 

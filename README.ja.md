@@ -146,6 +146,8 @@ macOS:
 - `-license-catalog` は後ろに指定した source が前の source を上書きします
 - `-locale` は `configs/license-texts.<locale>.json` を選びます
 - `-license-text-bundle` を指定すると locale ベース解決よりそのパスを優先します
+- `-exclude-policy` は versioned な shallow/subgraph exclude policy JSON を読み込みます
+- `-exclude-patterns` は引き続き利用でき、内部的には legacy shallow rule として扱われます
 
 見た目:
 

@@ -4,6 +4,8 @@
 - `licenses.schema.json`: `licenses.json` の正式な構造定義です。設定変更時のテストとレビューはこの schema を基準にします。
 - `license-texts.ja.json`: 日本語の説明文 bundle です。`description` / `obligations` / `permissions` / `limitations` を持ちます。
 - `license-texts.schema.json`: 説明文 bundle の正式な構造定義です。
+- `exclude-policy.schema.json`: `-exclude-policy` で読み込む exclude policy JSON の schema です。
+- `exclude-policy.sample.json`: shallow exclude / subgraph exclude を同じ policy file で表現するサンプルです。
 - `depaudit-license -locale ja` のように locale を指定すると、既定では `configs/license-texts.<locale>.json` を解決します。
 - `-license-text-bundle` を指定した場合は locale 規約よりそのパスを優先します。
 

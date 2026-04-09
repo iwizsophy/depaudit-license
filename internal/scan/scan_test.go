@@ -1,6 +1,7 @@
 package scan
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -300,6 +301,38 @@ func TestPackageBuilderHelpers(t *testing.T) {
 	}
 	if got := installedNodePackageJSONPath(filepath.Join("repo", "web"), "@scope/react"); got != filepath.Join("repo", "web", "node_modules", "@scope", "react", "package.json") {
 		t.Fatalf("installedNodePackageJSONPath scoped = %q", got)
+	}
+	if got := makeNodePackageKey("react", " 19.2.4 "); got != "react@19.2.4" {
+		t.Fatalf("makeNodePackageKey versioned = %q", got)
+	}
+	if got := makeNodePackageKey("react", " "); got != "react" {
+		t.Fatalf("makeNodePackageKey blank = %q", got)
+	}
+	if got := parsePeople([]json.RawMessage{
+		json.RawMessage(`"Alice <alice@example.test>"`),
+		json.RawMessage(`"Alice <alice@example.test>"`),
+		json.RawMessage(`{"name":"Bob"}`),
+		json.RawMessage(`{"email":"skip@example.test"}`),
+	}); len(got) != 2 || got[0] != "Alice" || got[1] != "Bob" {
+		t.Fatalf("parsePeople = %#v", got)
+	}
+	if got := cleanPerson("  Carol <carol@example.test> "); got != "Carol" {
+		t.Fatalf("cleanPerson = %q", got)
+	}
+	if got := firstCSVValue(" alpha ; beta "); got != "alpha" {
+		t.Fatalf("firstCSVValue = %q", got)
+	}
+	if got := firstCSVValue(" , "); got != "" {
+		t.Fatalf("firstCSVValue empty = %q", got)
+	}
+	if got := uniqueStrings([]string{"alice", "", "alice", "bob"}); len(got) != 2 || got[0] != "alice" || got[1] != "bob" {
+		t.Fatalf("uniqueStrings = %#v", got)
+	}
+	if got := firstNonEmpty("", "  ", "value", "later"); got != "value" {
+		t.Fatalf("firstNonEmpty = %q", got)
+	}
+	if isExactNodeVersion("^1.2.3") || isExactNodeVersion("workspace:*") || !isExactNodeVersion("1.2.3") {
+		t.Fatal("unexpected isExactNodeVersion result")
 	}
 }
 

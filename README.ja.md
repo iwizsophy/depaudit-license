@@ -172,6 +172,66 @@ remote catalog の挙動:
 - `-remote-catalog-mode stale-fallback`
 - `-remote-catalog-cache-dir <path>`
 
+## 除外ポリシー
+
+`depaudit-license` には、役割の異なる 2 層の除外があります。
+
+- `shallow exclude`: merge 後の最終出力調整です。`repository-scan` / CycloneDX / SPDX のどの入力由来 package に対しても適用されます。
+- `subgraph exclude`: source-local な dependency graph 調整です。現時点では、`repository-scan` で収集した `.NET / NuGet` package のうち、`obj/project.assets.json` から graph を取得できる場合にだけ適用されます。
+
+`shallow exclude` は、rendered な report / legal notice から package を外したいが、JSON 上の監査痕跡は残したい場合に使います。除外 package は visible package list、license group、production inventory、legal notice evidence からは外れますが、JSON 出力では `excludedPackages` に rule metadata 付きで残ります。
+
+`subgraph exclude` は、matched root package と、その root からしか到達できない依存枝を merge 前に落としたい場合に使います。別の非除外 root から到達可能な shared dependency は残ります。graph が利用できない場合は `onUnsupported` で `warn` / `error` / `ignore` を選べます。
+
+`-exclude-patterns` は、package 名断片ベースの簡易 shallow exclude として引き続き使えます。ただし内部的には合成 shallow rule に変換されるため、project path、dependency type、runtime asset、graph ベース条件は表現できません。
+
+最小例:
+
+```json
+{
+  "version": "v1alpha1",
+  "shallowExcludes": [
+    {
+      "id": "omit-test-tooling",
+      "reason": "hide development-only tooling from rendered outputs",
+      "match": {
+        "ecosystems": ["npm", "nuget"],
+        "dependencyTypes": ["devDependency", "devTransitiveDependency"],
+        "nameGlobs": ["eslint*", "xunit*"]
+      }
+    }
+  ],
+  "subgraphExcludes": [
+    {
+      "id": "omit-analyzer-subgraph",
+      "reason": "drop analyzer-only dependency branches from repository scan",
+      "onUnsupported": "warn",
+      "match": {
+        "ecosystems": ["nuget"],
+        "projects": ["src/server/App.csproj"],
+        "hasRuntimeAssets": false
+      }
+    }
+  ]
+}
+```
+
+実行例:
+
+```powershell
+.\depaudit-license-windows-amd64.exe `
+  -input repository-scan=.\my-repository `
+  -exclude-policy .\configs\exclude-policy.json `
+  -output-html dist\report.html `
+  -output-json dist\report.json `
+  -output-legal-html dist\legal-notice.html
+```
+
+関連ファイル:
+
+- [configs/exclude-policy.sample.json](configs/exclude-policy.sample.json)
+- [configs/exclude-policy.schema.json](configs/exclude-policy.schema.json)
+
 ## バージョニングと互換性
 
 公開 OSS リリースは `1.0.0` から開始します。

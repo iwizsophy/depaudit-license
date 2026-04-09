@@ -124,3 +124,61 @@ func TestFirstNonEmptyReturnsTrimmedValueOrBlank(t *testing.T) {
 		t.Fatalf("firstNonEmpty blank = %q", got)
 	}
 }
+
+func TestBuildOutputPreservesExcludedPackageDiagnostics(t *testing.T) {
+	t.Parallel()
+
+	view := View{
+		Packages: []inventory.Package{{
+			Ecosystem: "node",
+			Project:   "web",
+			Name:      "react",
+			Version:   "19.2.4",
+		}},
+		ExcludedPackages: []ExcludedPackage{{
+			RuleID:    "omit-helper",
+			Reason:    "exclude helper from final output",
+			SourceIDs: []string{"repo-scan"},
+			Package: inventory.Package{
+				Ecosystem: "node",
+				Project:   "web",
+				Name:      "internal-helper",
+				Version:   "1.0.0",
+			},
+		}},
+	}
+
+	output := BuildOutput(view, OutputConfig{})
+	if len(output.Report.ExcludedPackages) != 1 {
+		t.Fatalf("excluded package count = %d", len(output.Report.ExcludedPackages))
+	}
+	if output.Report.ExcludedPackages[0].RuleID != "omit-helper" || output.Report.ExcludedPackages[0].Package.Name != "internal-helper" {
+		t.Fatalf("unexpected excluded package diagnostic = %#v", output.Report.ExcludedPackages[0])
+	}
+}
+
+func TestBuildOutputPreservesDiagnostics(t *testing.T) {
+	t.Parallel()
+
+	view := View{
+		Diagnostics: []inventory.Diagnostic{{
+			SourceID:          "repo-scan",
+			RuleID:            "omit-analyzer-subgraph",
+			Code:              "subgraph-exclude-applied",
+			Severity:          "info",
+			Message:           "subgraph exclude applied",
+			ProjectPath:       "src/server/App.csproj",
+			MatchedRoots:      []string{"Analyzer.Core/1.0.0"},
+			RemovedPackages:   []string{"Analyzer.Core/1.0.0", "Build.Helper/1.0.0"},
+			PreservedPackages: []string{"Runtime.Core/2.0.0", "Shared.Lib/1.0.0"},
+		}},
+	}
+
+	output := BuildOutput(view, OutputConfig{})
+	if len(output.Report.Diagnostics) != 1 {
+		t.Fatalf("diagnostics = %#v", output.Report.Diagnostics)
+	}
+	if output.Report.Diagnostics[0].RuleID != "omit-analyzer-subgraph" || output.Report.Diagnostics[0].ProjectPath != "src/server/App.csproj" {
+		t.Fatalf("unexpected diagnostic = %#v", output.Report.Diagnostics[0])
+	}
+}

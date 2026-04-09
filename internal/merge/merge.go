@@ -14,14 +14,16 @@ type Config struct{}
 
 func Documents(cfg Config, docs ...inventory.Document) inventory.Document {
 	result := inventory.Document{
-		Sources:  make([]inventory.Source, 0),
-		Packages: make([]inventory.Package, 0),
+		Sources:     make([]inventory.Source, 0),
+		Packages:    make([]inventory.Package, 0),
+		Diagnostics: make([]inventory.Diagnostic, 0),
 	}
 	primaryIndex := map[string]int{}
 	secondaryIndex := map[string][]int{}
 
 	for _, doc := range docs {
 		result.Sources = append(result.Sources, doc.Sources...)
+		result.Diagnostics = append(result.Diagnostics, cloneDiagnostics(doc.Diagnostics)...)
 		for _, pkg := range doc.Packages {
 			if idx, ok := findMergeTarget(pkg, result.Packages, primaryIndex, secondaryIndex); ok {
 				merged, conflicts := mergePackage(result.Packages[idx], pkg)
@@ -51,6 +53,25 @@ func Documents(cfg Config, docs ...inventory.Document) inventory.Document {
 	sort.Slice(result.Conflicts, func(i, j int) bool {
 		left := strings.Join([]string{result.Conflicts[i].Identity, result.Conflicts[i].Field}, "\x00")
 		right := strings.Join([]string{result.Conflicts[j].Identity, result.Conflicts[j].Field}, "\x00")
+		return left < right
+	})
+	sort.Slice(result.Diagnostics, func(i, j int) bool {
+		left := strings.Join([]string{
+			result.Diagnostics[i].SourceID,
+			result.Diagnostics[i].RuleID,
+			result.Diagnostics[i].Code,
+			result.Diagnostics[i].ProjectPath,
+			result.Diagnostics[i].Project,
+			result.Diagnostics[i].Message,
+		}, "\x00")
+		right := strings.Join([]string{
+			result.Diagnostics[j].SourceID,
+			result.Diagnostics[j].RuleID,
+			result.Diagnostics[j].Code,
+			result.Diagnostics[j].ProjectPath,
+			result.Diagnostics[j].Project,
+			result.Diagnostics[j].Message,
+		}, "\x00")
 		return left < right
 	})
 	return result
@@ -232,10 +253,11 @@ func NewSource(id string, kind string, location string, displayLocation string) 
 	}
 }
 
-func SingleSourceDocument(source inventory.Source, packages []inventory.Package) inventory.Document {
+func SingleSourceDocument(source inventory.Source, packages []inventory.Package, diagnostics ...inventory.Diagnostic) inventory.Document {
 	doc := inventory.Document{
-		Sources:  []inventory.Source{source},
-		Packages: make([]inventory.Package, 0, len(packages)),
+		Sources:     []inventory.Source{source},
+		Packages:    make([]inventory.Package, 0, len(packages)),
+		Diagnostics: cloneDiagnostics(diagnostics),
 	}
 	for _, pkg := range packages {
 		pkg = normalizePackage(pkg)
@@ -269,6 +291,14 @@ func ValidateDocument(doc inventory.Document) error {
 			}
 		}
 	}
+	for _, diagnostic := range doc.Diagnostics {
+		if strings.TrimSpace(diagnostic.SourceID) == "" {
+			continue
+		}
+		if _, ok := sourceIDs[diagnostic.SourceID]; !ok {
+			return fmt.Errorf("diagnostic %s references unknown source id %q", diagnostic.Code, diagnostic.SourceID)
+		}
+	}
 	return nil
 }
 
@@ -279,6 +309,20 @@ func cloneFieldOrigins(input map[string]string) map[string]string {
 	result := make(map[string]string, len(input))
 	for key, value := range input {
 		result[key] = strings.TrimSpace(value)
+	}
+	return result
+}
+
+func cloneDiagnostics(input []inventory.Diagnostic) []inventory.Diagnostic {
+	if len(input) == 0 {
+		return nil
+	}
+	result := make([]inventory.Diagnostic, len(input))
+	for index, diagnostic := range input {
+		result[index] = diagnostic
+		result[index].MatchedRoots = append([]string(nil), diagnostic.MatchedRoots...)
+		result[index].RemovedPackages = append([]string(nil), diagnostic.RemovedPackages...)
+		result[index].PreservedPackages = append([]string(nil), diagnostic.PreservedPackages...)
 	}
 	return result
 }

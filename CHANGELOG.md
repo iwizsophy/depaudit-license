@@ -4,6 +4,12 @@ All notable public-release changes to this project will be documented in this fi
 
 The format is intentionally simple and release-oriented.
 
+## [Unreleased]
+
+### Added
+
+- Yarn lockfile support for repository scan, alongside the existing Node.js `package.json` fallback and pnpm lockfile support
+
 ## [1.0.0] - 2026-04-04
 
 First public release of `depaudit-license`.

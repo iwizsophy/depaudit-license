@@ -14,6 +14,7 @@ import (
 
 	"depaudit-license/internal/catalog"
 	"depaudit-license/internal/inventory"
+	"depaudit-license/internal/policy"
 )
 
 var now = time.Now
@@ -21,23 +22,26 @@ var now = time.Now
 type Config struct {
 	Root            string
 	ExcludePatterns []string
+	ShallowRules    []policy.Rule
 }
 
 type View struct {
-	GeneratedAt         string                `json:"generatedAt"`
-	Root                string                `json:"root"`
-	TotalPackages       int                   `json:"totalPackages"`
-	ProductionPackages  int                   `json:"productionPackages"`
-	TotalLicenses       int                   `json:"totalLicenses"`
-	ProductionLicenses  int                   `json:"productionLicenses"`
-	Ecosystems          []string              `json:"ecosystems"`
-	DependencyTypes     []string              `json:"dependencyTypes"`
-	ExcludePatterns     []string              `json:"excludePatterns,omitempty"`
-	RiskSummary         []RiskStat            `json:"riskSummary"`
-	Groups              []LicenseGroup        `json:"groups"`
-	Packages            []inventory.Package   `json:"packages"`
-	ProductionInventory []inventory.Package   `json:"productionInventory"`
-	LegalNoticeEvidence []LegalNoticeEvidence `json:"legalNoticeEvidence,omitempty"`
+	GeneratedAt         string                 `json:"generatedAt"`
+	Root                string                 `json:"root"`
+	TotalPackages       int                    `json:"totalPackages"`
+	ProductionPackages  int                    `json:"productionPackages"`
+	TotalLicenses       int                    `json:"totalLicenses"`
+	ProductionLicenses  int                    `json:"productionLicenses"`
+	Ecosystems          []string               `json:"ecosystems"`
+	DependencyTypes     []string               `json:"dependencyTypes"`
+	ExcludePatterns     []string               `json:"excludePatterns,omitempty"`
+	RiskSummary         []RiskStat             `json:"riskSummary"`
+	Groups              []LicenseGroup         `json:"groups"`
+	Packages            []inventory.Package    `json:"packages"`
+	ProductionInventory []inventory.Package    `json:"productionInventory"`
+	ExcludedPackages    []ExcludedPackage      `json:"excludedPackages,omitempty"`
+	Diagnostics         []inventory.Diagnostic `json:"diagnostics,omitempty"`
+	LegalNoticeEvidence []LegalNoticeEvidence  `json:"legalNoticeEvidence,omitempty"`
 }
 
 type RiskStat struct {
@@ -81,6 +85,13 @@ type NoticePackageRef struct {
 	Homepage        string `json:"homepage,omitempty"`
 }
 
+type ExcludedPackage struct {
+	RuleID    string            `json:"ruleId,omitempty"`
+	Reason    string            `json:"reason,omitempty"`
+	SourceIDs []string          `json:"sourceIds,omitempty"`
+	Package   inventory.Package `json:"package"`
+}
+
 type htmlView struct {
 	View
 	ThemeCSS template.CSS
@@ -105,9 +116,9 @@ func Build(cfg Config, packages []inventory.Package, cat *catalog.Catalog) View 
 }
 
 func BuildDocument(cfg Config, doc inventory.Document, cat *catalog.Catalog) View {
-	allPackages := append([]inventory.Package(nil), doc.Packages...)
-	productionPackages := filterProductionPackages(doc.Packages, cfg.ExcludePatterns)
-	allGroups := buildGroups(allPackages, productionPackages, cat)
+	visiblePackages, excludedPackages := applyShallowExcludes(doc.Packages, cfg.ShallowRules)
+	productionPackages := filterProductionPackages(visiblePackages)
+	allGroups := buildGroups(visiblePackages, productionPackages, cat)
 
 	riskSummary := []RiskStat{
 		{Level: "high", Label: "High", Count: 0},
@@ -135,19 +146,35 @@ func BuildDocument(cfg Config, doc inventory.Document, cat *catalog.Catalog) Vie
 	return View{
 		GeneratedAt:         now().Format(time.RFC3339),
 		Root:                cfg.Root,
-		TotalPackages:       len(allPackages),
+		TotalPackages:       len(visiblePackages),
 		ProductionPackages:  len(productionPackages),
 		TotalLicenses:       len(totalLicenseSet),
 		ProductionLicenses:  len(productionLicenseSet),
-		Ecosystems:          uniquePackageField(allPackages, func(pkg inventory.Package) string { return pkg.Ecosystem }),
-		DependencyTypes:     uniquePackageField(allPackages, func(pkg inventory.Package) string { return pkg.DependencyType }),
+		Ecosystems:          uniquePackageField(visiblePackages, func(pkg inventory.Package) string { return pkg.Ecosystem }),
+		DependencyTypes:     uniquePackageField(visiblePackages, func(pkg inventory.Package) string { return pkg.DependencyType }),
 		ExcludePatterns:     cfg.ExcludePatterns,
 		RiskSummary:         riskSummary,
 		Groups:              allGroups,
-		Packages:            allPackages,
+		Packages:            visiblePackages,
 		ProductionInventory: productionPackages,
+		ExcludedPackages:    excludedPackages,
+		Diagnostics:         cloneDiagnostics(doc.Diagnostics),
 		LegalNoticeEvidence: buildLegalNoticeEvidence(allGroups, productionPackages),
 	}
+}
+
+func cloneDiagnostics(values []inventory.Diagnostic) []inventory.Diagnostic {
+	if len(values) == 0 {
+		return nil
+	}
+	result := make([]inventory.Diagnostic, len(values))
+	for index, diagnostic := range values {
+		result[index] = diagnostic
+		result[index].MatchedRoots = append([]string(nil), diagnostic.MatchedRoots...)
+		result[index].RemovedPackages = append([]string(nil), diagnostic.RemovedPackages...)
+		result[index].PreservedPackages = append([]string(nil), diagnostic.PreservedPackages...)
+	}
+	return result
 }
 
 func RenderHTML(view View, templatePath string, cssPath string) ([]byte, error) {
@@ -216,13 +243,10 @@ func parseRenderTemplate(templatePath string, templatePayload []byte) (*template
 	return tpl, nil
 }
 
-func filterProductionPackages(packages []inventory.Package, excludePatterns []string) []inventory.Package {
+func filterProductionPackages(packages []inventory.Package) []inventory.Package {
 	var result []inventory.Package
 	for _, pkg := range packages {
 		if isDevelopmentDependency(pkg.DependencyType) {
-			continue
-		}
-		if containsPattern(pkg.Name, excludePatterns) {
 			continue
 		}
 		result = append(result, pkg)
@@ -230,18 +254,50 @@ func filterProductionPackages(packages []inventory.Package, excludePatterns []st
 	return result
 }
 
-func containsPattern(name string, patterns []string) bool {
-	name = strings.ToLower(name)
-	for _, pattern := range patterns {
-		if pattern != "" && strings.Contains(name, pattern) {
-			return true
-		}
-	}
-	return false
-}
-
 func isDevelopmentDependency(value string) bool {
 	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(value)), "dev")
+}
+
+func applyShallowExcludes(packages []inventory.Package, rules []policy.Rule) ([]inventory.Package, []ExcludedPackage) {
+	if len(packages) == 0 {
+		return nil, nil
+	}
+
+	visible := make([]inventory.Package, 0, len(packages))
+	excluded := make([]ExcludedPackage, 0)
+	for _, pkg := range packages {
+		rule, matched := matchShallowRule(pkg, rules)
+		if !matched {
+			visible = append(visible, pkg)
+			continue
+		}
+		excluded = append(excluded, ExcludedPackage{
+			RuleID:    strings.TrimSpace(rule.ID),
+			Reason:    strings.TrimSpace(rule.Reason),
+			SourceIDs: append([]string(nil), pkg.Provenance.SourceIDs...),
+			Package:   pkg,
+		})
+	}
+	sort.Slice(excluded, func(i, j int) bool {
+		left := excluded[i]
+		right := excluded[j]
+		return strings.Join([]string{left.Package.Ecosystem, left.Package.Project, left.Package.Name, left.Package.Version}, "\x00") <
+			strings.Join([]string{right.Package.Ecosystem, right.Package.Project, right.Package.Name, right.Package.Version}, "\x00")
+	})
+	return visible, excluded
+}
+
+func matchShallowRule(pkg inventory.Package, rules []policy.Rule) (policy.Rule, bool) {
+	for _, rule := range rules {
+		if selectorMatchesPackage(rule.Match, pkg) {
+			return rule, true
+		}
+	}
+	return policy.Rule{}, false
+}
+
+func selectorMatchesPackage(selector policy.Selector, pkg inventory.Package) bool {
+	return policy.SelectorMatchesPackage(selector, pkg)
 }
 
 func buildGroups(allPackages []inventory.Package, productionPackages []inventory.Package, cat *catalog.Catalog) []LicenseGroup {
@@ -432,7 +488,7 @@ func riskOrder(level string) string {
 func ecosystemLabel(value string) string {
 	switch strings.TrimSpace(value) {
 	case "node":
-		return "Node.js / npm"
+		return "Node.js / npm / pnpm / Yarn"
 	case "dotnet":
 		return ".NET / NuGet"
 	case "generic":

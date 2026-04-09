@@ -182,3 +182,88 @@ func TestMergeStringFieldAndSeedingHelpers(t *testing.T) {
 		t.Fatalf("expected empty origin map, got %#v", prov.FieldOrigins)
 	}
 }
+
+func TestSingleSourceDocumentClonesDiagnostics(t *testing.T) {
+	t.Parallel()
+
+	source := NewSource("repo", "repository-scan", "/workspace/repo", ".")
+	inputDiagnostic := inventory.Diagnostic{
+		SourceID:          "repo",
+		RuleID:            "omit-analyzer-subgraph",
+		Code:              "subgraph-exclude-applied",
+		Severity:          "info",
+		Message:           "applied",
+		MatchedRoots:      []string{"Analyzer.Core/1.0.0"},
+		RemovedPackages:   []string{"Analyzer.Core/1.0.0"},
+		PreservedPackages: []string{"Shared.Lib/1.0.0"},
+	}
+
+	doc := SingleSourceDocument(source, nil, inputDiagnostic)
+	if len(doc.Diagnostics) != 1 {
+		t.Fatalf("diagnostics = %#v", doc.Diagnostics)
+	}
+
+	doc.Diagnostics[0].MatchedRoots[0] = "mutated"
+	doc.Diagnostics[0].RemovedPackages[0] = "mutated"
+	doc.Diagnostics[0].PreservedPackages[0] = "mutated"
+	if inputDiagnostic.MatchedRoots[0] != "Analyzer.Core/1.0.0" || inputDiagnostic.RemovedPackages[0] != "Analyzer.Core/1.0.0" || inputDiagnostic.PreservedPackages[0] != "Shared.Lib/1.0.0" {
+		t.Fatalf("input diagnostic mutated = %#v", inputDiagnostic)
+	}
+}
+
+func TestValidateDocumentAndDocumentsHandleDiagnostics(t *testing.T) {
+	t.Parallel()
+
+	docA := inventory.Document{
+		Sources: []inventory.Source{{ID: "b"}},
+		Diagnostics: []inventory.Diagnostic{{
+			SourceID: "b",
+			RuleID:   "rule-b",
+			Code:     "diag-b",
+			Message:  "b",
+		}},
+	}
+	docB := inventory.Document{
+		Sources: []inventory.Source{{ID: "a"}},
+		Diagnostics: []inventory.Diagnostic{
+			{
+				SourceID: "a",
+				RuleID:   "rule-a",
+				Code:     "diag-a",
+				Message:  "a",
+			},
+			{
+				Code:    "diag-no-source",
+				Message: "no source id is allowed",
+			},
+		},
+	}
+
+	merged := Documents(Config{}, docA, docB)
+	if len(merged.Diagnostics) != 3 {
+		t.Fatalf("diagnostics = %#v", merged.Diagnostics)
+	}
+	if got := []string{merged.Diagnostics[0].Code, merged.Diagnostics[1].Code, merged.Diagnostics[2].Code}; got[0] != "diag-no-source" || got[1] != "diag-a" || got[2] != "diag-b" {
+		t.Fatalf("sorted diagnostics = %#v", got)
+	}
+
+	merged.Diagnostics[0].Message = "mutated"
+	if docB.Diagnostics[0].Message != "a" {
+		t.Fatalf("source diagnostic mutated = %#v", docB.Diagnostics)
+	}
+
+	if err := ValidateDocument(merged); err != nil {
+		t.Fatalf("ValidateDocument merged diagnostics: %v", err)
+	}
+	err := ValidateDocument(inventory.Document{
+		Sources: []inventory.Source{{ID: "repo"}},
+		Diagnostics: []inventory.Diagnostic{{
+			SourceID: "missing",
+			Code:     "diag",
+			Message:  "missing source",
+		}},
+	})
+	if err == nil {
+		t.Fatal("expected missing diagnostic source error")
+	}
+}

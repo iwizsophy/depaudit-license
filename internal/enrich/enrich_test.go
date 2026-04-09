@@ -466,3 +466,36 @@ func TestClonePackagesClonesSlicesWhilePreservingNilOrigins(t *testing.T) {
 		t.Fatalf("conflict fields mutated = %#v", source[0].Provenance.ConflictFields)
 	}
 }
+
+func TestCloneDocumentClonesDiagnostics(t *testing.T) {
+	t.Parallel()
+
+	doc := inventory.Document{
+		Sources: []inventory.Source{{ID: "repo"}},
+		Diagnostics: []inventory.Diagnostic{{
+			SourceID:          "repo",
+			RuleID:            "omit-analyzer-subgraph",
+			Code:              "subgraph-exclude-applied",
+			Severity:          "info",
+			Message:           "applied",
+			MatchedRoots:      []string{"Analyzer.Core/1.0.0"},
+			RemovedPackages:   []string{"Analyzer.Core/1.0.0"},
+			PreservedPackages: []string{"Shared.Lib/1.0.0"},
+		}},
+	}
+
+	cloned := cloneDocument(doc)
+	if len(cloned.Diagnostics) != 1 {
+		t.Fatalf("diagnostics = %#v", cloned.Diagnostics)
+	}
+	cloned.Diagnostics[0].MatchedRoots[0] = "mutated"
+	cloned.Diagnostics[0].RemovedPackages[0] = "mutated"
+	cloned.Diagnostics[0].PreservedPackages[0] = "mutated"
+	if doc.Diagnostics[0].MatchedRoots[0] != "Analyzer.Core/1.0.0" || doc.Diagnostics[0].RemovedPackages[0] != "Analyzer.Core/1.0.0" || doc.Diagnostics[0].PreservedPackages[0] != "Shared.Lib/1.0.0" {
+		t.Fatalf("source diagnostics mutated = %#v", doc.Diagnostics)
+	}
+
+	if got := cloneDiagnostics(nil); got != nil {
+		t.Fatalf("cloneDiagnostics nil = %#v", got)
+	}
+}

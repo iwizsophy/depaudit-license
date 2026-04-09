@@ -488,3 +488,29 @@ func TestUniqueNonEmptyTrimsSortsAndDedupes(t *testing.T) {
 		t.Fatalf("uniqueNonEmpty = %#v", got)
 	}
 }
+
+func TestMetadataLookupServiceNodeProjectDirsOmitsBlankProjectPaths(t *testing.T) {
+	t.Parallel()
+
+	service := NewMetadataLookupService(MetadataLookupConfig{
+		RepositoryRoots: []string{"/repo-b", "/repo-a", "/repo-a"},
+	})
+	dirs := service.nodeProjectDirs(inventory.Package{})
+	if !slices.Equal(dirs, []string{"/repo-a", "/repo-b"}) {
+		t.Fatalf("dirs = %#v", dirs)
+	}
+}
+
+func TestMetadataLookupServiceDotNetFallbackLookupReturnsNotFound(t *testing.T) {
+	t.Parallel()
+
+	service := NewMetadataLookupService(MetadataLookupConfig{})
+	meta, ok := service.lookupMetadata(inventory.Package{
+		Ecosystem: "dotnet",
+		Name:      "Missing.Package",
+		Version:   "1.0.0",
+	})
+	if ok || meta.Source != "fallback" {
+		t.Fatalf("dotnet fallback lookup = %#v %v", meta, ok)
+	}
+}

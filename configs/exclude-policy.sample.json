@@ -1,0 +1,26 @@
+{
+  "version": "v1alpha1",
+  "shallowExcludes": [
+    {
+      "id": "omit-test-tooling",
+      "reason": "exclude test-only packages from rendered outputs",
+      "match": {
+        "ecosystems": ["npm", "nuget"],
+        "dependencyTypes": ["devDependency", "devTransitiveDependency"],
+        "nameGlobs": ["eslint*", "xunit*"]
+      }
+    }
+  ],
+  "subgraphExcludes": [
+    {
+      "id": "omit-analyzer-subgraph",
+      "reason": "drop source-local analyzer-only dependency branches when graph support exists",
+      "onUnsupported": "warn",
+      "match": {
+        "ecosystems": ["nuget"],
+        "projects": ["src/server/App.csproj"],
+        "hasRuntimeAssets": false
+      }
+    }
+  ]
+}

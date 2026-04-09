@@ -9,6 +9,7 @@ import (
 	"depaudit-license/internal/catalog"
 	"depaudit-license/internal/inventory"
 	"depaudit-license/internal/merge"
+	"depaudit-license/internal/policy"
 	"depaudit-license/internal/sbom"
 	"depaudit-license/internal/scan"
 )
@@ -28,9 +29,10 @@ type SourceSpec struct {
 }
 
 type LoadConfig struct {
-	Sources []SourceSpec
-	Client  *http.Client
-	Catalog *catalog.Catalog
+	Sources       []SourceSpec
+	Client        *http.Client
+	Catalog       *catalog.Catalog
+	SubgraphRules []policy.Rule
 }
 
 type Result struct {
@@ -78,15 +80,24 @@ func loadSource(cfg LoadConfig, source SourceSpec, index int) (inventory.Documen
 	}
 	switch strings.TrimSpace(source.Kind) {
 	case InputKindRepositoryScan:
-		packages, err := scan.Collect(scan.Config{
+		scanResult, err := scan.CollectResult(scan.Config{
 			Root: source.Location,
 		})
 		if err != nil {
 			return inventory.Document{}, "", err
 		}
+		scanResult, err = scan.ApplySubgraphExcludes(scan.SubgraphExcludeConfig{
+			Root:     source.Location,
+			SourceID: id,
+			Rules:    cfg.SubgraphRules,
+		}, scanResult)
+		if err != nil {
+			return inventory.Document{}, "", err
+		}
 		return merge.SingleSourceDocument(
 			merge.NewSource(id, InputKindRepositoryScan, source.Location, sourceDisplayLocation(source)),
-			scan.ToInventory(packages),
+			scan.ToInventory(scanResult.Packages),
+			scanResult.Diagnostics...,
 		), sourceDisplayLocation(source), nil
 	case InputKindCycloneDXJSON:
 		packages, err := sbom.LoadCycloneDXJSON(source.Location, cfg.Catalog)

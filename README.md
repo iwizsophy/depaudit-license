@@ -47,7 +47,7 @@ You can specify `-input` multiple times to merge sources into one normalized inv
 
 Repository scan currently recognizes these package ecosystems directly:
 
-- `Node.js / npm`
+- `Node.js / npm / pnpm / Yarn`
 - `.NET / NuGet`
 
 SBOM inputs can also carry packages that are normalized as:
@@ -56,7 +56,7 @@ SBOM inputs can also carry packages that are normalized as:
 
 In practice this means:
 
-- repository scan is designed around Node.js / npm and .NET / NuGet manifests and metadata
+- repository scan is designed around Node.js manifests and lockfiles (`package.json`, `pnpm-lock.yaml`, `yarn.lock`) and .NET / NuGet manifests and metadata
 - CycloneDX / SPDX inputs can bring in packages from other ecosystems, but metadata enrichment and ecosystem-specific behavior may be more limited when the package is only represented as generic SBOM data
 - report and legal notice outputs work across the normalized inventory, while enrichment and vulnerability matching quality can vary by ecosystem and available identifiers
 
@@ -146,6 +146,8 @@ License definitions and descriptions:
 - later `-license-catalog` values override earlier sources
 - `-locale` selects `configs/license-texts.<locale>.json`
 - `-license-text-bundle` overrides locale-based bundle resolution
+- `-exclude-policy` loads versioned shallow/subgraph exclude policy JSON
+- `-exclude-patterns` remains supported and is internally synthesized as a legacy shallow rule
 
 Presentation:
 
@@ -169,6 +171,66 @@ Remote catalog behavior:
 - `-remote-catalog-mode fail-fast`
 - `-remote-catalog-mode stale-fallback`
 - `-remote-catalog-cache-dir <path>`
+
+## Exclude policies
+
+`depaudit-license` supports two different exclusion layers.
+
+- `shallow exclude`: post-merge output filtering. This applies to the final normalized inventory regardless of whether packages came from `repository-scan`, CycloneDX, or SPDX input.
+- `subgraph exclude`: source-local dependency graph filtering. This currently applies only to `.NET / NuGet` packages collected from `repository-scan` when a package graph is available from `obj/project.assets.json`.
+
+Use `shallow exclude` when you want to hide packages from the rendered report / legal notice output but still keep an audit trail in JSON output. Excluded packages are removed from visible package lists, license groups, production inventory, and legal notice evidence, but remain visible in `excludedPackages` with rule metadata.
+
+Use `subgraph exclude` when you want to remove a matched root package and dependencies that are reachable only from that root before merge. Shared dependencies are preserved if another non-excluded root still reaches them. If graph support is unavailable, `onUnsupported` controls whether the policy should `warn`, `error`, or `ignore`.
+
+`-exclude-patterns` remains a legacy shorthand for simple shallow exclusion by package-name fragment. It is internally converted into a synthesized shallow rule, so it cannot express project path, dependency type, runtime-asset, or graph-based behavior.
+
+Minimal example:
+
+```json
+{
+  "version": "v1alpha1",
+  "shallowExcludes": [
+    {
+      "id": "omit-test-tooling",
+      "reason": "hide development-only tooling from rendered outputs",
+      "match": {
+        "ecosystems": ["npm", "nuget"],
+        "dependencyTypes": ["devDependency", "devTransitiveDependency"],
+        "nameGlobs": ["eslint*", "xunit*"]
+      }
+    }
+  ],
+  "subgraphExcludes": [
+    {
+      "id": "omit-analyzer-subgraph",
+      "reason": "drop analyzer-only dependency branches from repository scan",
+      "onUnsupported": "warn",
+      "match": {
+        "ecosystems": ["nuget"],
+        "projects": ["src/server/App.csproj"],
+        "hasRuntimeAssets": false
+      }
+    }
+  ]
+}
+```
+
+Example invocation:
+
+```powershell
+.\depaudit-license-windows-amd64.exe `
+  -input repository-scan=.\my-repository `
+  -exclude-policy .\configs\exclude-policy.json `
+  -output-html dist\report.html `
+  -output-json dist\report.json `
+  -output-legal-html dist\legal-notice.html
+```
+
+See also:
+
+- [configs/exclude-policy.sample.json](configs/exclude-policy.sample.json)
+- [configs/exclude-policy.schema.json](configs/exclude-policy.schema.json)
 
 ## Versioning and compatibility
 

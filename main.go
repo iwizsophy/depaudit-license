@@ -15,6 +15,7 @@ import (
 	"depaudit-license/internal/catalog"
 	"depaudit-license/internal/enrich"
 	"depaudit-license/internal/input"
+	"depaudit-license/internal/policy"
 	"depaudit-license/internal/report"
 	"depaudit-license/internal/vuln"
 )
@@ -30,6 +31,8 @@ type config struct {
 	licenseCatalogs       []string
 	locale                string
 	licenseTextBundle     string
+	excludePolicyPath     string
+	excludePolicy         policy.File
 	remoteCatalogMode     string
 	remoteCatalogCacheDir string
 	templatePath          string
@@ -129,9 +132,10 @@ func run(args []string, stdout io.Writer) error {
 	}
 
 	inputResult, err := input.Load(input.LoadConfig{
-		Sources: cfg.inputs,
-		Client:  client,
-		Catalog: cat,
+		Sources:       cfg.inputs,
+		Client:        client,
+		Catalog:       cat,
+		SubgraphRules: cfg.excludePolicy.SubgraphExcludes,
 	})
 	if err != nil {
 		return err
@@ -148,6 +152,7 @@ func run(args []string, stdout io.Writer) error {
 	view := report.BuildDocument(report.Config{
 		Root:            inputResult.Root,
 		ExcludePatterns: cfg.excludePatterns,
+		ShallowRules:    cfg.excludePolicy.ShallowExcludes,
 	}, inputResult.Document, cat)
 
 	html, err := report.RenderHTML(view, templatePath, themeCSSPath)
@@ -244,6 +249,7 @@ func parseFlags(args []string) (config, error) {
 	fs.Var(&licenseCatalogs, "license-catalog", "license catalog JSON path or https URL; specify multiple times to apply later sources as overrides")
 	fs.StringVar(&cfg.locale, "locale", "ja", "license description locale")
 	fs.StringVar(&cfg.licenseTextBundle, "license-text-bundle", "", "license description bundle JSON path; overrides -locale when specified")
+	fs.StringVar(&cfg.excludePolicyPath, "exclude-policy", "", "exclude policy JSON path")
 	fs.StringVar(&cfg.remoteCatalogMode, "remote-catalog-mode", catalog.RemoteCatalogModeFailFast, "remote catalog mode: fail-fast or stale-fallback")
 	fs.StringVar(&cfg.remoteCatalogCacheDir, "remote-catalog-cache-dir", "", "remote catalog cache directory; default is the user cache directory")
 	fs.StringVar(&cfg.templatePath, "template", filepath.Join("templates", "report.html.tmpl"), "HTML template path")
@@ -283,6 +289,19 @@ func parseFlags(args []string) (config, error) {
 	}
 	cfg.licenseCatalogs = append([]string(nil), licenseCatalogs...)
 	cfg.excludePatterns = splitPatterns(excludePatterns)
+	cfg.excludePolicy = policy.File{Version: policy.VersionV1Alpha1}
+	if strings.TrimSpace(cfg.excludePolicyPath) != "" {
+		pathValue, err := resolveExistingPath(cfg.excludePolicyPath)
+		if err != nil {
+			return config{}, err
+		}
+		cfg.excludePolicyPath = pathValue
+		cfg.excludePolicy, err = policy.LoadFile(pathValue)
+		if err != nil {
+			return config{}, err
+		}
+	}
+	cfg.excludePolicy = policy.MergeLegacyPatterns(cfg.excludePolicy, cfg.excludePatterns)
 	if vulnerabilityOutputsEnabled(cfg) && strings.TrimSpace(cfg.vulnMode) == vuln.ModeDisabled {
 		cfg.vulnMode = vuln.ModeOSVOnly
 	}

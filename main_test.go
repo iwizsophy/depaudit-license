@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -194,6 +195,73 @@ func TestParseFlagsRejectsInvalidInputSyntax(t *testing.T) {
 
 	if _, err := parseFlags([]string{"-input", "cyclonedx-json"}); err == nil {
 		t.Fatal("expected invalid input syntax error")
+	}
+}
+
+func TestParseFlagsLoadsExcludePolicyFile(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	policyPath := filepath.Join(dir, "exclude-policy.json")
+	if err := os.WriteFile(policyPath, []byte(`{
+  "version": "v1alpha1",
+  "shallowExcludes": [
+    {
+      "id": "omit-dev",
+      "match": {
+        "names": ["eslint"]
+      }
+    }
+  ]
+}`), 0o644); err != nil {
+		t.Fatalf("write exclude policy: %v", err)
+	}
+
+	cfg, err := parseFlags([]string{"-exclude-policy", policyPath})
+	if err != nil {
+		t.Fatalf("parse flags: %v", err)
+	}
+	if cfg.excludePolicyPath != policyPath {
+		t.Fatalf("unexpected policy path: %q", cfg.excludePolicyPath)
+	}
+	if len(cfg.excludePolicy.ShallowExcludes) != 1 {
+		t.Fatalf("unexpected shallow rule count: %d", len(cfg.excludePolicy.ShallowExcludes))
+	}
+}
+
+func TestParseFlagsSynthesizesLegacyExcludePatternsIntoPolicy(t *testing.T) {
+	t.Parallel()
+
+	cfg, err := parseFlags([]string{"-exclude-patterns", "eslint, webpack"})
+	if err != nil {
+		t.Fatalf("parse flags: %v", err)
+	}
+	if len(cfg.excludePatterns) != 2 {
+		t.Fatalf("unexpected exclude patterns: %#v", cfg.excludePatterns)
+	}
+	if len(cfg.excludePolicy.ShallowExcludes) != 1 {
+		t.Fatalf("expected synthesized shallow rule, got %d", len(cfg.excludePolicy.ShallowExcludes))
+	}
+}
+
+func TestParseFlagsRejectsInvalidExcludePolicy(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	policyPath := filepath.Join(dir, "exclude-policy.json")
+	payload, err := json.Marshal(map[string]any{
+		"version":         "v2",
+		"shallowExcludes": []map[string]any{{"match": map[string]any{"names": []string{"eslint"}}}},
+	})
+	if err != nil {
+		t.Fatalf("marshal exclude policy: %v", err)
+	}
+	if err := os.WriteFile(policyPath, payload, 0o644); err != nil {
+		t.Fatalf("write exclude policy: %v", err)
+	}
+
+	if _, err := parseFlags([]string{"-exclude-policy", policyPath}); err == nil {
+		t.Fatal("expected invalid exclude policy error")
 	}
 }
 

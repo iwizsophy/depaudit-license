@@ -196,3 +196,95 @@ func TestMinYearFallsBackToPackageClockYear(t *testing.T) {
 		t.Fatalf("minYear fallback = %d", got)
 	}
 }
+
+func TestApplyShallowExcludesKeepsPackagesWhenNoRuleMatches(t *testing.T) {
+	t.Parallel()
+
+	packages := []inventory.Package{
+		{Ecosystem: "node", Project: "web", Name: "react", Version: "19.2.4", DependencyType: "dependency"},
+		{Ecosystem: "dotnet", Project: "api", Name: "Newtonsoft.Json", Version: "13.0.3", DependencyType: "dependency"},
+	}
+
+	visible, excluded := applyShallowExcludes(packages, []policy.Rule{{
+		ID: "omit-dev",
+		Match: policy.Selector{
+			DependencyTypes: []string{"devDependency"},
+		},
+	}})
+
+	if len(visible) != 2 || len(excluded) != 0 {
+		t.Fatalf("visible=%#v excluded=%#v", visible, excluded)
+	}
+}
+
+func TestApplyShallowExcludesMatchesCompositeSelector(t *testing.T) {
+	t.Parallel()
+
+	withRuntime := true
+	packages := []inventory.Package{
+		{
+			Provenance:       inventory.PackageProvenance{SourceIDs: []string{"repo-scan"}},
+			Ecosystem:        "dotnet",
+			Project:          "Api",
+			Name:             "Newtonsoft.Json",
+			Version:          "13.0.3",
+			PURL:             "pkg:nuget/Newtonsoft.Json@13.0.3",
+			DependencyType:   "dependency",
+			HasRuntimeAssets: true,
+		},
+		{
+			Ecosystem:        "dotnet",
+			Project:          "Api",
+			Name:             "Serilog",
+			Version:          "3.1.0",
+			PURL:             "pkg:nuget/Serilog@3.1.0",
+			DependencyType:   "dependency",
+			HasRuntimeAssets: true,
+		},
+	}
+
+	visible, excluded := applyShallowExcludes(packages, []policy.Rule{{
+		ID:     "omit-newtonsoft",
+		Reason: "test composite selector",
+		Match: policy.Selector{
+			Ecosystems:       []string{"DOTNET"},
+			Names:            []string{"Newtonsoft.Json"},
+			Versions:         []string{"13.0.3"},
+			Projects:         []string{"Api"},
+			DependencyTypes:  []string{"DEPENDENCY"},
+			HasRuntimeAssets: &withRuntime,
+			PURLs:            []string{"pkg:nuget/Newtonsoft.Json@13.0.3"},
+		},
+	}})
+
+	if len(visible) != 1 || visible[0].Name != "Serilog" {
+		t.Fatalf("visible=%#v", visible)
+	}
+	if len(excluded) != 1 || excluded[0].Package.Name != "Newtonsoft.Json" || excluded[0].RuleID != "omit-newtonsoft" {
+		t.Fatalf("excluded=%#v", excluded)
+	}
+}
+
+func TestProductionGroupsAndLegalNoticeEvidenceHelpers(t *testing.T) {
+	t.Parallel()
+
+	groups := []LicenseGroup{
+		{Key: "MIT", ProductionPackages: []inventory.Package{{Name: "react"}}, NoticeText: "notice"},
+		{Key: "Unknown"},
+	}
+	if got := productionGroups(groups); len(got) != 1 || got[0].Key != "MIT" {
+		t.Fatalf("productionGroups = %#v", got)
+	}
+
+	evidence := buildLegalNoticeEvidence([]LicenseGroup{
+		{Key: "MIT", Name: "MIT License", ProductionPackages: []inventory.Package{{Ecosystem: "node", Project: "web", Name: "react", Version: "19.2.4"}}, NoticeText: "notice"},
+	}, []inventory.Package{
+		{Ecosystem: "node", Project: "web", Name: "react", Version: "19.2.4", EmbeddedLicenseText: "embedded", EmbeddedLicensePath: "LICENSE"},
+	})
+	if len(evidence) != 2 {
+		t.Fatalf("evidence = %#v", evidence)
+	}
+	if evidence[0].Kind != "embedded-license-text" || evidence[1].Kind != "license-notice" {
+		t.Fatalf("unexpected evidence ordering = %#v", evidence)
+	}
+}

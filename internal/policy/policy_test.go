@@ -1,6 +1,10 @@
 package policy
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
 
 func TestParseAcceptsValidPolicy(t *testing.T) {
 	t.Parallel()
@@ -126,5 +130,53 @@ func TestMergeLegacyPatternsIgnoresBlankValues(t *testing.T) {
 	}
 	if got := doc.ShallowExcludes[0].Match.NameGlobs; len(got) != 2 || got[0] != "*eslint*" || got[1] != "*webpack*" {
 		t.Fatalf("unexpected normalized globs: %#v", got)
+	}
+}
+
+func TestLoadFileReadsAndWrapsErrors(t *testing.T) {
+	t.Parallel()
+
+	if _, err := LoadFile(filepath.Join(t.TempDir(), "missing.json")); err == nil {
+		t.Fatal("expected read error")
+	}
+
+	dir := t.TempDir()
+	pathValue := filepath.Join(dir, "broken.json")
+	if err := os.WriteFile(pathValue, []byte(`{broken`), 0o644); err != nil {
+		t.Fatalf("write broken policy: %v", err)
+	}
+	if _, err := LoadFile(pathValue); err == nil {
+		t.Fatal("expected parse error")
+	}
+}
+
+func TestLoadFileParsesValidPolicy(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	pathValue := filepath.Join(dir, "policy.json")
+	if err := os.WriteFile(pathValue, []byte(`{
+  "version":"v1alpha1",
+  "subgraphExcludes":[{"id":"omit-subgraph","onUnsupported":"IGNORE","match":{"names":["pkg"]}}]
+}`), 0o644); err != nil {
+		t.Fatalf("write policy: %v", err)
+	}
+
+	doc, err := LoadFile(pathValue)
+	if err != nil {
+		t.Fatalf("load policy: %v", err)
+	}
+	if len(doc.SubgraphExcludes) != 1 || doc.SubgraphExcludes[0].OnUnsupported != OnUnsupportedIgnore {
+		t.Fatalf("loaded document = %#v", doc)
+	}
+}
+
+func TestMergeLegacyPatternsLeavesDocumentUntouchedWhenPatternsBlank(t *testing.T) {
+	t.Parallel()
+
+	doc := File{Version: VersionV1Alpha1, ShallowExcludes: []Rule{{ID: "existing", Match: Selector{Names: []string{"pkg"}}}}}
+	merged := MergeLegacyPatterns(doc, []string{" ", ""})
+	if len(merged.ShallowExcludes) != 1 || merged.ShallowExcludes[0].ID != "existing" {
+		t.Fatalf("merged = %#v", merged)
 	}
 }

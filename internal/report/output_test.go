@@ -124,3 +124,35 @@ func TestFirstNonEmptyReturnsTrimmedValueOrBlank(t *testing.T) {
 		t.Fatalf("firstNonEmpty blank = %q", got)
 	}
 }
+
+func TestBuildOutputPreservesExcludedPackageDiagnostics(t *testing.T) {
+	t.Parallel()
+
+	view := View{
+		Packages: []inventory.Package{{
+			Ecosystem: "node",
+			Project:   "web",
+			Name:      "react",
+			Version:   "19.2.4",
+		}},
+		ExcludedPackages: []ExcludedPackage{{
+			RuleID:    "omit-helper",
+			Reason:    "exclude helper from final output",
+			SourceIDs: []string{"repo-scan"},
+			Package: inventory.Package{
+				Ecosystem: "node",
+				Project:   "web",
+				Name:      "internal-helper",
+				Version:   "1.0.0",
+			},
+		}},
+	}
+
+	output := BuildOutput(view, OutputConfig{})
+	if len(output.Report.ExcludedPackages) != 1 {
+		t.Fatalf("excluded package count = %d", len(output.Report.ExcludedPackages))
+	}
+	if output.Report.ExcludedPackages[0].RuleID != "omit-helper" || output.Report.ExcludedPackages[0].Package.Name != "internal-helper" {
+		t.Fatalf("unexpected excluded package diagnostic = %#v", output.Report.ExcludedPackages[0])
+	}
+}

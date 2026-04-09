@@ -151,6 +151,7 @@ func run(args []string, stdout io.Writer) error {
 	view := report.BuildDocument(report.Config{
 		Root:            inputResult.Root,
 		ExcludePatterns: cfg.excludePatterns,
+		ShallowRules:    cfg.excludePolicy.ShallowExcludes,
 	}, inputResult.Document, cat)
 
 	html, err := report.RenderHTML(view, templatePath, themeCSSPath)

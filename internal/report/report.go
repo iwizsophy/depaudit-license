@@ -14,6 +14,7 @@ import (
 
 	"depaudit-license/internal/catalog"
 	"depaudit-license/internal/inventory"
+	"depaudit-license/internal/policy"
 )
 
 var now = time.Now
@@ -21,6 +22,7 @@ var now = time.Now
 type Config struct {
 	Root            string
 	ExcludePatterns []string
+	ShallowRules    []policy.Rule
 }
 
 type View struct {
@@ -37,6 +39,7 @@ type View struct {
 	Groups              []LicenseGroup        `json:"groups"`
 	Packages            []inventory.Package   `json:"packages"`
 	ProductionInventory []inventory.Package   `json:"productionInventory"`
+	ExcludedPackages    []ExcludedPackage     `json:"excludedPackages,omitempty"`
 	LegalNoticeEvidence []LegalNoticeEvidence `json:"legalNoticeEvidence,omitempty"`
 }
 
@@ -81,6 +84,13 @@ type NoticePackageRef struct {
 	Homepage        string `json:"homepage,omitempty"`
 }
 
+type ExcludedPackage struct {
+	RuleID    string            `json:"ruleId,omitempty"`
+	Reason    string            `json:"reason,omitempty"`
+	SourceIDs []string          `json:"sourceIds,omitempty"`
+	Package   inventory.Package `json:"package"`
+}
+
 type htmlView struct {
 	View
 	ThemeCSS template.CSS
@@ -105,9 +115,9 @@ func Build(cfg Config, packages []inventory.Package, cat *catalog.Catalog) View 
 }
 
 func BuildDocument(cfg Config, doc inventory.Document, cat *catalog.Catalog) View {
-	allPackages := append([]inventory.Package(nil), doc.Packages...)
-	productionPackages := filterProductionPackages(doc.Packages, cfg.ExcludePatterns)
-	allGroups := buildGroups(allPackages, productionPackages, cat)
+	visiblePackages, excludedPackages := applyShallowExcludes(doc.Packages, cfg.ShallowRules)
+	productionPackages := filterProductionPackages(visiblePackages)
+	allGroups := buildGroups(visiblePackages, productionPackages, cat)
 
 	riskSummary := []RiskStat{
 		{Level: "high", Label: "High", Count: 0},
@@ -135,17 +145,18 @@ func BuildDocument(cfg Config, doc inventory.Document, cat *catalog.Catalog) Vie
 	return View{
 		GeneratedAt:         now().Format(time.RFC3339),
 		Root:                cfg.Root,
-		TotalPackages:       len(allPackages),
+		TotalPackages:       len(visiblePackages),
 		ProductionPackages:  len(productionPackages),
 		TotalLicenses:       len(totalLicenseSet),
 		ProductionLicenses:  len(productionLicenseSet),
-		Ecosystems:          uniquePackageField(allPackages, func(pkg inventory.Package) string { return pkg.Ecosystem }),
-		DependencyTypes:     uniquePackageField(allPackages, func(pkg inventory.Package) string { return pkg.DependencyType }),
+		Ecosystems:          uniquePackageField(visiblePackages, func(pkg inventory.Package) string { return pkg.Ecosystem }),
+		DependencyTypes:     uniquePackageField(visiblePackages, func(pkg inventory.Package) string { return pkg.DependencyType }),
 		ExcludePatterns:     cfg.ExcludePatterns,
 		RiskSummary:         riskSummary,
 		Groups:              allGroups,
-		Packages:            allPackages,
+		Packages:            visiblePackages,
 		ProductionInventory: productionPackages,
+		ExcludedPackages:    excludedPackages,
 		LegalNoticeEvidence: buildLegalNoticeEvidence(allGroups, productionPackages),
 	}
 }
@@ -216,13 +227,10 @@ func parseRenderTemplate(templatePath string, templatePayload []byte) (*template
 	return tpl, nil
 }
 
-func filterProductionPackages(packages []inventory.Package, excludePatterns []string) []inventory.Package {
+func filterProductionPackages(packages []inventory.Package) []inventory.Package {
 	var result []inventory.Package
 	for _, pkg := range packages {
 		if isDevelopmentDependency(pkg.DependencyType) {
-			continue
-		}
-		if containsPattern(pkg.Name, excludePatterns) {
 			continue
 		}
 		result = append(result, pkg)
@@ -230,18 +238,105 @@ func filterProductionPackages(packages []inventory.Package, excludePatterns []st
 	return result
 }
 
-func containsPattern(name string, patterns []string) bool {
-	name = strings.ToLower(name)
-	for _, pattern := range patterns {
-		if pattern != "" && strings.Contains(name, pattern) {
+func isDevelopmentDependency(value string) bool {
+	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(value)), "dev")
+}
+
+func applyShallowExcludes(packages []inventory.Package, rules []policy.Rule) ([]inventory.Package, []ExcludedPackage) {
+	if len(packages) == 0 {
+		return nil, nil
+	}
+
+	visible := make([]inventory.Package, 0, len(packages))
+	excluded := make([]ExcludedPackage, 0)
+	for _, pkg := range packages {
+		rule, matched := matchShallowRule(pkg, rules)
+		if !matched {
+			visible = append(visible, pkg)
+			continue
+		}
+		excluded = append(excluded, ExcludedPackage{
+			RuleID:    strings.TrimSpace(rule.ID),
+			Reason:    strings.TrimSpace(rule.Reason),
+			SourceIDs: append([]string(nil), pkg.Provenance.SourceIDs...),
+			Package:   pkg,
+		})
+	}
+	sort.Slice(excluded, func(i, j int) bool {
+		left := excluded[i]
+		right := excluded[j]
+		return strings.Join([]string{left.Package.Ecosystem, left.Package.Project, left.Package.Name, left.Package.Version}, "\x00") <
+			strings.Join([]string{right.Package.Ecosystem, right.Package.Project, right.Package.Name, right.Package.Version}, "\x00")
+	})
+	return visible, excluded
+}
+
+func matchShallowRule(pkg inventory.Package, rules []policy.Rule) (policy.Rule, bool) {
+	for _, rule := range rules {
+		if selectorMatchesPackage(rule.Match, pkg) {
+			return rule, true
+		}
+	}
+	return policy.Rule{}, false
+}
+
+func selectorMatchesPackage(selector policy.Selector, pkg inventory.Package) bool {
+	if len(selector.Ecosystems) > 0 && !containsNormalized(selector.Ecosystems, pkg.Ecosystem) {
+		return false
+	}
+	if len(selector.Names) > 0 && !containsNormalized(selector.Names, pkg.Name) {
+		return false
+	}
+	if len(selector.NameGlobs) > 0 && !matchesAnyGlob(selector.NameGlobs, pkg.Name) {
+		return false
+	}
+	if len(selector.Versions) > 0 && !containsTrimmed(selector.Versions, pkg.Version) {
+		return false
+	}
+	if len(selector.Projects) > 0 && !containsTrimmed(selector.Projects, pkg.Project) {
+		return false
+	}
+	if len(selector.DependencyTypes) > 0 && !containsNormalized(selector.DependencyTypes, pkg.DependencyType) {
+		return false
+	}
+	if selector.HasRuntimeAssets != nil && pkg.HasRuntimeAssets != *selector.HasRuntimeAssets {
+		return false
+	}
+	if len(selector.PURLs) > 0 && !containsTrimmed(selector.PURLs, pkg.PURL) {
+		return false
+	}
+	return true
+}
+
+func containsNormalized(values []string, candidate string) bool {
+	normalizedCandidate := strings.ToLower(strings.TrimSpace(candidate))
+	for _, value := range values {
+		if strings.ToLower(strings.TrimSpace(value)) == normalizedCandidate {
 			return true
 		}
 	}
 	return false
 }
 
-func isDevelopmentDependency(value string) bool {
-	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(value)), "dev")
+func containsTrimmed(values []string, candidate string) bool {
+	trimmedCandidate := strings.TrimSpace(candidate)
+	for _, value := range values {
+		if strings.TrimSpace(value) == trimmedCandidate {
+			return true
+		}
+	}
+	return false
+}
+
+func matchesAnyGlob(globs []string, candidate string) bool {
+	normalizedCandidate := strings.ToLower(strings.TrimSpace(candidate))
+	for _, glob := range globs {
+		ok, err := filepath.Match(strings.ToLower(strings.TrimSpace(glob)), normalizedCandidate)
+		if err == nil && ok {
+			return true
+		}
+	}
+	return false
 }
 
 func buildGroups(allPackages []inventory.Package, productionPackages []inventory.Package, cat *catalog.Catalog) []LicenseGroup {

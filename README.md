@@ -47,7 +47,7 @@ You can specify `-input` multiple times to merge sources into one normalized inv
 
 Repository scan currently recognizes these package ecosystems directly:
 
-- `Node.js / npm`
+- `Node.js / npm / pnpm / Yarn`
 - `.NET / NuGet`
 
 SBOM inputs can also carry packages that are normalized as:
@@ -56,7 +56,7 @@ SBOM inputs can also carry packages that are normalized as:
 
 In practice this means:
 
-- repository scan is designed around Node.js / npm and .NET / NuGet manifests and metadata
+- repository scan is designed around Node.js manifests and lockfiles (`package.json`, `pnpm-lock.yaml`, `yarn.lock`) and .NET / NuGet manifests and metadata
 - CycloneDX / SPDX inputs can bring in packages from other ecosystems, but metadata enrichment and ecosystem-specific behavior may be more limited when the package is only represented as generic SBOM data
 - report and legal notice outputs work across the normalized inventory, while enrichment and vulnerability matching quality can vary by ecosystem and available identifiers
 

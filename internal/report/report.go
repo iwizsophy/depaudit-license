@@ -432,7 +432,7 @@ func riskOrder(level string) string {
 func ecosystemLabel(value string) string {
 	switch strings.TrimSpace(value) {
 	case "node":
-		return "Node.js / npm"
+		return "Node.js / npm / pnpm / Yarn"
 	case "dotnet":
 		return ".NET / NuGet"
 	case "generic":

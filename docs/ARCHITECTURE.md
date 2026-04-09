@@ -27,7 +27,7 @@ Multiple `-input` flags are merged into one normalized inventory.
 
 Repository scan directly supports:
 
-- `node` (`Node.js / npm`)
+- `node` (`Node.js / npm / pnpm / Yarn`)
 - `dotnet` (`.NET / NuGet`)
 
 SBOM imports can also normalize packages as:

@@ -380,6 +380,45 @@ snapshots:
 	}
 }
 
+func TestCollectSkipsPackageJSONWhenCoveredByYarnLockfile(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	appDir := filepath.Join(root, "apps", "web")
+	if err := os.MkdirAll(appDir, 0o755); err != nil {
+		t.Fatalf("mkdir app dir: %v", err)
+	}
+
+	if err := os.WriteFile(filepath.Join(root, "package.json"), []byte(`{
+  "name":"repo",
+  "workspaces":["apps/*"]
+}`), 0o644); err != nil {
+		t.Fatalf("write root package.json: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(appDir, "package.json"), []byte(`{
+  "name":"@repo/web",
+  "dependencies":{"react":"19.2.4","scheduler":"0.23.0"}
+}`), 0o644); err != nil {
+		t.Fatalf("write package.json: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "yarn.lock"), []byte(`react@19.2.4:
+  version "19.2.4"
+`), 0o644); err != nil {
+		t.Fatalf("write lockfile: %v", err)
+	}
+
+	packages, err := Collect(Config{Root: root})
+	if err != nil {
+		t.Fatalf("collect: %v", err)
+	}
+	if len(packages) != 1 {
+		t.Fatalf("packages = %#v", packages)
+	}
+	if packages[0].Name != "react" || packages[0].Project != "@repo/web" {
+		t.Fatalf("package = %#v", packages[0])
+	}
+}
+
 func TestCollectTreatsCleanedRootAsTraversalBoundary(t *testing.T) {
 	t.Parallel()
 

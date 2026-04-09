@@ -78,6 +78,9 @@ func TestRenderTemplateErrorBranchesAndLabels(t *testing.T) {
 	if got := ecosystemLabel("dotnet"); got != ".NET / NuGet" {
 		t.Fatalf("ecosystemLabel dotnet = %q", got)
 	}
+	if got := ecosystemLabel("node"); got != "Node.js / npm / pnpm / Yarn" {
+		t.Fatalf("ecosystemLabel node = %q", got)
+	}
 	if got := ecosystemLabel("generic"); got != "Generic" {
 		t.Fatalf("ecosystemLabel generic = %q", got)
 	}

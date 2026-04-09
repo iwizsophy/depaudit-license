@@ -51,10 +51,12 @@ type metadata struct {
 }
 
 type nodePackageFile struct {
-	Name             string            `json:"name"`
-	Dependencies     map[string]string `json:"dependencies"`
-	DevDependencies  map[string]string `json:"devDependencies"`
-	PeerDependencies map[string]string `json:"peerDependencies"`
+	Name                 string            `json:"name"`
+	Dependencies         map[string]string `json:"dependencies"`
+	DevDependencies      map[string]string `json:"devDependencies"`
+	PeerDependencies     map[string]string `json:"peerDependencies"`
+	OptionalDependencies map[string]string `json:"optionalDependencies"`
+	Workspaces           nodeWorkspaces    `json:"workspaces"`
 }
 
 type npmVersionPayload struct {
@@ -112,8 +114,14 @@ func Collect(cfg Config) ([]Package, error) {
 				return err
 			}
 			packages = append(packages, resolved...)
+		case "yarn.lock":
+			resolved, err := collectYarnPackages(path)
+			if err != nil {
+				return err
+			}
+			packages = append(packages, resolved...)
 		case "package.json":
-			if nearestPnpmLockfile(path, cfg.Root) != "" {
+			if nearestPnpmLockfile(path, cfg.Root) != "" || nearestYarnLockfile(path, cfg.Root) != "" {
 				return nil
 			}
 			resolved, err := collectNodePackages(path)

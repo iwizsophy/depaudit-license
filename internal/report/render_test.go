@@ -49,7 +49,7 @@ func TestRenderHTMLAndLegalNoticeUseTemplateHelpers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("render html: %v", err)
 	}
-	if !strings.Contains(string(html), "d-repo-root") || !strings.Contains(string(html), "Node.js / npm") || !strings.Contains(string(html), "Development dependency") || !strings.Contains(string(html), "color:red") {
+	if !strings.Contains(string(html), "d-repo-root") || !strings.Contains(string(html), "Node.js / npm / pnpm / Yarn") || !strings.Contains(string(html), "Development dependency") || !strings.Contains(string(html), "color:red") {
 		t.Fatalf("unexpected html: %s", string(html))
 	}
 

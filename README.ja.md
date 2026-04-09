@@ -47,7 +47,7 @@ SBOM は有効な手段ですが、それだけでは利用者に提示する成
 
 repository scan が直接認識する package ecosystem は現在次のとおりです。
 
-- `Node.js / npm`
+- `Node.js / npm / pnpm / Yarn`
 - `.NET / NuGet`
 
 SBOM input からは、次の normalized ecosystem も取り込めます。
@@ -56,7 +56,7 @@ SBOM input からは、次の normalized ecosystem も取り込めます。
 
 意味合いとしては次のとおりです。
 
-- repository scan は Node.js / npm と .NET / NuGet の manifest / metadata を中心に設計されています
+- repository scan は Node.js の manifest / lockfile（`package.json`, `pnpm-lock.yaml`, `yarn.lock`）と .NET / NuGet の manifest / metadata を中心に設計されています
 - CycloneDX / SPDX input では他 ecosystem の package も取り込めますが、generic な SBOM data としてしか表現できない場合は metadata enrichment や ecosystem 固有挙動が限定されます
 - report / legal notice 出力は正規化 inventory 全体に対して動作しますが、enrichment や vulnerability matching の精度は ecosystem と利用できる identifier に依存します
 

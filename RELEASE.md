@@ -18,9 +18,10 @@ release 前に少なくとも次を実行します。
 ```powershell
 go test ./...
 go test ./... -coverprofile=coverage.out
+go tool cover -func=coverage.out
 ```
 
-release workflow は GitHub Actions の [`.github/workflows/release.yml`](/D:/Source/Self/license/.github/workflows/release.yml) に従い、次の条件を満たした tag push を前提とします。
+release workflow は GitHub Actions の [`.github/workflows/release.yml`](.github/workflows/release.yml) に従い、次の条件を満たした tag push を前提とします。
 
 - tag は `vX.Y.Z` 形式の exact semantic version であること
 - tag は lightweight tag ではなく annotated tag であること
@@ -29,8 +30,8 @@ release workflow は GitHub Actions の [`.github/workflows/release.yml`](/D:/So
 例:
 
 ```powershell
-git tag -a v1.0.0 -m "Release v1.0.0"
-git push origin v1.0.0
+git tag -a v1.2.0 -m "Release v1.2.0"
+git push origin v1.2.0
 ```
 
 ## Representative smoke matrix
@@ -53,6 +54,17 @@ smoke matrix に加えて、次の最終出力契約は個別の integration tes
 - vulnerability JSON provenance
 - CycloneDX / SPDX / multi-source input の最終 JSON 出力
 - remote catalog override / pinned remote catalog の反映
+- embedded license text の raw text copy と `copiedFilePath` 出力
+- package-level license override の適用、validation 失敗、custom catalog key、provenance / diagnostics 出力
+
+## 1.2.0 release checklist
+
+`v1.2.0` では、少なくとも次の文書状態を確認してから tag を作成します。
+
+- [CHANGELOG.md](CHANGELOG.md) に `1.2.0` の section があり、embedded license text と package-level license override が記載されている
+- [README.md](README.md) と [README.ja.md](README.ja.md) に `-license-override-file` の使い分け、`ifMissing` / `force` の挙動、実行例が記載されている
+- [configs/README.md](configs/README.md) に license override schema / sample と selector の用途が記載されている
+- release archive に含まれる `configs/` から `license-overrides.schema.json` と `license-overrides.sample.json` を参照できる
 
 ## Release decision
 

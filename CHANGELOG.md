@@ -6,9 +6,23 @@ The format is intentionally simple and release-oriented.
 
 ## [Unreleased]
 
+No notable changes yet.
+
+## [1.2.0] - 2026-04-10
+
+### Added
+
+- Package-level license override files via `-license-override-file`, for manually binding selected packages such as unresolved `Unknown` licenses to catalog license keys.
+- JSON schema and sample config for package-level license overrides in `configs/license-overrides.schema.json` and `configs/license-overrides.sample.json`.
+- Legal notice handling for embedded package-local license text, including copied raw text files under `license-texts/...` and `copiedFilePath` output links.
+
+## [1.1.0] - 2026-04-10
+
 ### Added
 
 - Yarn lockfile support for repository scan, alongside the existing Node.js `package.json` fallback and pnpm lockfile support
+- Versioned exclude policy files via `-exclude-policy`, including shallow output filtering and source-local NuGet subgraph exclusion.
+- NuGet dependency graph extraction from `obj/project.assets.json` for graph-aware repository scan filtering.
 
 ## [1.0.0] - 2026-04-04
 

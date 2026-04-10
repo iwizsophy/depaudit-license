@@ -15,6 +15,7 @@ import (
 	"depaudit-license/internal/catalog"
 	"depaudit-license/internal/enrich"
 	"depaudit-license/internal/input"
+	"depaudit-license/internal/licenseoverride"
 	"depaudit-license/internal/policy"
 	"depaudit-license/internal/report"
 	"depaudit-license/internal/vuln"
@@ -31,8 +32,10 @@ type config struct {
 	licenseCatalogs       []string
 	locale                string
 	licenseTextBundle     string
+	licenseOverridePath   string
 	excludePolicyPath     string
 	excludePolicy         policy.File
+	licenseOverride       licenseoverride.File
 	remoteCatalogMode     string
 	remoteCatalogCacheDir string
 	templatePath          string
@@ -130,6 +133,12 @@ func run(args []string, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
+	if strings.TrimSpace(cfg.licenseOverridePath) != "" {
+		cfg.licenseOverride, err = licenseoverride.LoadFile(cfg.licenseOverridePath, cat)
+		if err != nil {
+			return err
+		}
+	}
 
 	inputResult, err := input.Load(input.LoadConfig{
 		Sources:       cfg.inputs,
@@ -144,6 +153,14 @@ func run(args []string, stdout io.Writer) error {
 		Client:          client,
 		Catalog:         cat,
 		RepositoryRoots: repositoryScanRoots(cfg.inputs),
+	}, inputResult.Document)
+	if err != nil {
+		return err
+	}
+	inputResult.Document, err = licenseoverride.Apply(licenseoverride.ApplyConfig{
+		Catalog:        cat,
+		Rules:          cfg.licenseOverride.LicenseOverrides,
+		SourceLocation: cfg.licenseOverridePath,
 	}, inputResult.Document)
 	if err != nil {
 		return err
@@ -256,6 +273,7 @@ func parseFlags(args []string) (config, error) {
 	fs.Var(&licenseCatalogs, "license-catalog", "license catalog JSON path or https URL; specify multiple times to apply later sources as overrides")
 	fs.StringVar(&cfg.locale, "locale", "ja", "license description locale")
 	fs.StringVar(&cfg.licenseTextBundle, "license-text-bundle", "", "license description bundle JSON path; overrides -locale when specified")
+	fs.StringVar(&cfg.licenseOverridePath, "license-override-file", "", "package-level license override JSON path")
 	fs.StringVar(&cfg.excludePolicyPath, "exclude-policy", "", "exclude policy JSON path")
 	fs.StringVar(&cfg.remoteCatalogMode, "remote-catalog-mode", catalog.RemoteCatalogModeFailFast, "remote catalog mode: fail-fast or stale-fallback")
 	fs.StringVar(&cfg.remoteCatalogCacheDir, "remote-catalog-cache-dir", "", "remote catalog cache directory; default is the user cache directory")
@@ -297,6 +315,14 @@ func parseFlags(args []string) (config, error) {
 	cfg.licenseCatalogs = append([]string(nil), licenseCatalogs...)
 	cfg.excludePatterns = splitPatterns(excludePatterns)
 	cfg.excludePolicy = policy.File{Version: policy.VersionV1Alpha1}
+	cfg.licenseOverride = licenseoverride.File{Version: licenseoverride.VersionV1Alpha1}
+	if strings.TrimSpace(cfg.licenseOverridePath) != "" {
+		pathValue, err := resolveExistingPath(cfg.licenseOverridePath)
+		if err != nil {
+			return config{}, err
+		}
+		cfg.licenseOverridePath = pathValue
+	}
 	if strings.TrimSpace(cfg.excludePolicyPath) != "" {
 		pathValue, err := resolveExistingPath(cfg.excludePolicyPath)
 		if err != nil {

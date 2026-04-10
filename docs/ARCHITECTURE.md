@@ -11,7 +11,8 @@ The main product boundary is:
 1. load inputs
 2. normalize into inventory
 3. enrich metadata
-4. render report / legal notice / vulnerability outputs
+4. apply package-level license overrides
+5. render report / legal notice / vulnerability outputs
 
 ## Input model
 
@@ -61,6 +62,8 @@ Catalog sources can be layered, and remote catalogs are supported with:
 - `stale-fallback`
 
 Locale bundles enrich descriptions and obligations without changing the normalized license key structure.
+
+Package-level license overrides are intentionally separate from catalog sources. Catalog overrides normalize raw license evidence globally, while license override files match selected inventory packages and update their `licenseKey` with explicit provenance.
 
 ## Metadata enrichment and provenance
 

@@ -360,7 +360,7 @@ func readEmbeddedLicenseFromZip(reader *zip.Reader, licensePath string) string {
 
 func normalizeEmbeddedLicensePath(licensePath string) string {
 	value := filepath.ToSlash(strings.TrimSpace(licensePath))
-	if strings.HasPrefix(value, "//") || filepath.VolumeName(filepath.FromSlash(value)) != "" {
+	if strings.HasPrefix(value, "//") || hasWindowsVolumePrefix(value) || filepath.VolumeName(filepath.FromSlash(value)) != "" {
 		return ""
 	}
 
@@ -369,10 +369,18 @@ func normalizeEmbeddedLicensePath(licensePath string) string {
 		return ""
 	}
 	platformPath := filepath.FromSlash(normalized)
-	if filepath.VolumeName(platformPath) != "" || filepath.IsAbs(platformPath) {
+	if hasWindowsVolumePrefix(normalized) || filepath.VolumeName(platformPath) != "" || filepath.IsAbs(platformPath) {
 		return ""
 	}
 	return normalized
+}
+
+func hasWindowsVolumePrefix(value string) bool {
+	if len(value) < 2 || value[1] != ':' {
+		return false
+	}
+	drive := value[0]
+	return (drive >= 'A' && drive <= 'Z') || (drive >= 'a' && drive <= 'z')
 }
 
 func readZipFile(file *zip.File) ([]byte, error) {

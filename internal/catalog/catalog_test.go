@@ -458,6 +458,63 @@ func TestNormalizeTextUsesEmbeddedLicenseEvidence(t *testing.T) {
 	}
 }
 
+func TestNormalizeTextClampsThresholdAfterPhraseNormalization(t *testing.T) {
+	t.Parallel()
+
+	cat := loadCatalogFixture(t, `{
+  "fallback": "Unknown",
+  "licenses": [
+    {
+      "key": "Custom",
+      "name": "Custom License",
+      "family": "custom",
+      "version": "",
+      "copyleft_strength": "none",
+      "requires_manual_review": false,
+      "spdx_ids": ["LicenseRef-Custom"],
+      "names": [],
+      "exact_urls": [],
+      "url_prefixes": [],
+      "contains": [],
+      "description": "desc",
+      "obligations": ["notice"],
+      "permissions": ["commercial"],
+      "limitations": ["warranty"],
+      "color": "#2f855a",
+      "risk_level": "low",
+      "notice_template": "template",
+      "text_matchers": ["custom permissive license text", "custom permissive license text", "short"],
+      "text_match_threshold": 2
+    },
+    {
+      "key": "Unknown",
+      "name": "Unknown",
+      "family": "Unknown",
+      "version": "",
+      "copyleft_strength": "unknown",
+      "requires_manual_review": true,
+      "spdx_ids": ["unknown"],
+      "names": [],
+      "exact_urls": [],
+      "url_prefixes": [],
+      "contains": [],
+      "description": "desc",
+      "obligations": ["review"],
+      "permissions": [],
+      "limitations": ["unknown"],
+      "color": "#718096",
+      "risk_level": "unknown",
+      "notice_template": "template"
+    }
+  ]
+}`)
+
+	got, _ := cat.NormalizeText("custom permissive license text")
+	if got != "Custom" {
+		t.Fatalf("NormalizeText with clamped threshold = %q, want Custom", got)
+	}
+}
+
 func TestLoadRejectsDuplicateKeys(t *testing.T) {
 	t.Parallel()
 

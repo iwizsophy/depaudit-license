@@ -11,7 +11,7 @@
 - `depaudit-license -locale ja` のように locale を指定すると、既定では `configs/license-texts.<locale>.json` を解決します。
 - `-license-text-bundle` を指定した場合は locale 規約よりそのパスを優先します。
 
-`licenses.json` の `text_matchers` / `text_match_threshold` / `required_phrases` は、同梱ライセンスファイル本文から license key を推定するための任意フィールドです。`required_phrases` は全件一致、`text_matchers` は `text_match_threshold` 件以上の一致で採用されます。`text_match_threshold` を省略した場合、または `0` 以下を指定した場合は、既定で `text_matchers` の件数が使われるため、実質的に `text_matchers` は全件一致が必要です。
+`licenses.json` の `text_matchers` / `text_match_threshold` / `required_phrases` は、同梱ライセンスファイル本文から license key を推定するための任意フィールドです。`required_phrases` は全件一致、`text_matchers` は `text_match_threshold` 件以上の一致で採用されます。`text_match_threshold` を省略した場合、または `0` 以下を指定した場合は、既定で `text_matchers` の件数が使われるため、実質的に `text_matchers` は全件一致が必要です。短すぎる phrase や重複 phrase は正規化時に除外され、`text_match_threshold` が正規化後の件数を超える場合はその件数に丸められます。
 
 ## Catalog Sources
 

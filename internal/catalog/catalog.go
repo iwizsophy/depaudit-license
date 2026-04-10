@@ -422,6 +422,8 @@ func (c *Catalog) registerTextMatch(key string, required []string, phrases []str
 		match.threshold = 0
 	} else if match.threshold <= 0 {
 		match.threshold = len(match.phrases)
+	} else if match.threshold > len(match.phrases) {
+		match.threshold = len(match.phrases)
 	}
 	match.specificity = textMatchSpecificity(match)
 	c.text = append(c.text, match)

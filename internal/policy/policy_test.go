@@ -106,6 +106,25 @@ func TestParseRejectsInvalidNameGlob(t *testing.T) {
 	}
 }
 
+func TestValidateSelectorNormalizesAndRejectsEmptySelector(t *testing.T) {
+	t.Parallel()
+
+	selector, err := ValidateSelector(Selector{
+		Ecosystems: []string{" npm ", ""},
+		Names:      []string{" react "},
+	})
+	if err != nil {
+		t.Fatalf("validate selector: %v", err)
+	}
+	if len(selector.Ecosystems) != 1 || selector.Ecosystems[0] != "npm" || selector.Names[0] != "react" {
+		t.Fatalf("normalized selector = %#v", selector)
+	}
+
+	if _, err := ValidateSelector(Selector{}); err == nil {
+		t.Fatal("expected empty selector validation error")
+	}
+}
+
 func TestMergeLegacyPatternsSynthesizesShallowRule(t *testing.T) {
 	t.Parallel()
 

@@ -2213,6 +2213,256 @@ func TestRunReportJSONUsesCycloneDXInputKindProvenance(t *testing.T) {
 	}
 }
 
+func TestRunAppliesPackageLicenseOverrideFileToReportJSON(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	sbomPath := filepath.Join(dir, "custom-bom.json")
+	testutil.WriteIndentedJSONFixture(t, sbomPath, map[string]any{
+		"bomFormat":   "CycloneDX",
+		"specVersion": "1.5",
+		"version":     1,
+		"components": []any{
+			map[string]any{
+				"bom-ref": "pkg:generic/acme/manual-widget@1.2.3",
+				"type":    "library",
+				"group":   "acme",
+				"name":    "manual-widget",
+				"version": "1.2.3",
+				"purl":    "pkg:generic/acme/manual-widget@1.2.3",
+				"scope":   "required",
+				"licenses": []any{
+					map[string]any{
+						"license": map[string]any{
+							"name": "Reviewed Private Terms",
+							"text": map[string]any{
+								"content":     "Custom reviewed license evidence",
+								"contentType": "text/plain",
+							},
+						},
+					},
+				},
+			},
+		},
+	})
+
+	overridePath := filepath.Join(dir, "license-overrides.json")
+	testutil.WriteIndentedJSONFixture(t, overridePath, map[string]any{
+		"version": "v1alpha1",
+		"licenseOverrides": []any{
+			map[string]any{
+				"id":         "manual-widget-mit",
+				"reason":     "manual review confirmed MIT terms",
+				"licenseKey": "MIT",
+				"mode":       "ifMissing",
+				"match": map[string]any{
+					"ecosystems": []string{"generic"},
+					"names":      []string{"acme/manual-widget"},
+					"versions":   []string{"1.2.3"},
+					"purls":      []string{"pkg:generic/acme/manual-widget@1.2.3"},
+				},
+				"evidence": map[string]any{
+					"note": "test review evidence",
+				},
+			},
+		},
+	})
+
+	jsonPath := filepath.Join(dir, "report.json")
+	if err := run([]string{
+		"-input", "cyclonedx-json=" + sbomPath,
+		"-license-override-file", overridePath,
+		"-output-html", filepath.Join(dir, "report.html"),
+		"-output-json", jsonPath,
+		"-output-legal-html", filepath.Join(dir, "legal.html"),
+	}, &bytes.Buffer{}); err != nil {
+		t.Fatalf("run with license override file failed: %v", err)
+	}
+
+	payload, err := os.ReadFile(jsonPath)
+	if err != nil {
+		t.Fatalf("read report json: %v", err)
+	}
+	var output struct {
+		Report struct {
+			Packages []struct {
+				Name       string `json:"name"`
+				RawLicense string `json:"rawLicense"`
+				LicenseKey string `json:"licenseKey"`
+				Provenance struct {
+					SourceIDs    []string          `json:"sourceIds"`
+					FieldOrigins map[string]string `json:"fieldOrigins"`
+				} `json:"provenance"`
+			} `json:"packages"`
+			Diagnostics []struct {
+				SourceID string `json:"sourceId"`
+				RuleID   string `json:"ruleId"`
+				Code     string `json:"code"`
+				Severity string `json:"severity"`
+			} `json:"diagnostics"`
+		} `json:"report"`
+	}
+	if err := json.Unmarshal(payload, &output); err != nil {
+		t.Fatalf("parse report json: %v", err)
+	}
+	if len(output.Report.Packages) != 1 {
+		t.Fatalf("packages = %#v", output.Report.Packages)
+	}
+	pkg := output.Report.Packages[0]
+	if pkg.Name != "acme/manual-widget" || pkg.LicenseKey != "MIT" || pkg.RawLicense != "Reviewed Private Terms" {
+		t.Fatalf("package = %#v", pkg)
+	}
+	if pkg.Provenance.FieldOrigins["licenseKey"] != "license-override:manual-widget-mit" {
+		t.Fatalf("field origins = %#v", pkg.Provenance.FieldOrigins)
+	}
+	if !slices.Contains(pkg.Provenance.SourceIDs, "license-override:manual-widget-mit") {
+		t.Fatalf("source ids = %#v", pkg.Provenance.SourceIDs)
+	}
+	if len(output.Report.Diagnostics) != 1 ||
+		output.Report.Diagnostics[0].Code != "license_override_applied" ||
+		output.Report.Diagnostics[0].RuleID != "manual-widget-mit" ||
+		output.Report.Diagnostics[0].Severity != "info" {
+		t.Fatalf("diagnostics = %#v", output.Report.Diagnostics)
+	}
+}
+
+func TestRunRejectsLicenseOverrideFileWithUnknownCatalogKey(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	overridePath := filepath.Join(dir, "license-overrides.json")
+	testutil.WriteIndentedJSONFixture(t, overridePath, map[string]any{
+		"version": "v1alpha1",
+		"licenseOverrides": []any{
+			map[string]any{
+				"id":         "manual-widget-missing-key",
+				"licenseKey": "Missing-License-Key",
+				"match": map[string]any{
+					"names": []string{"manual-widget"},
+				},
+			},
+		},
+	})
+
+	err := run([]string{
+		"-input", "cyclonedx-json=internal/sbom/testdata/cyclonedx/missing-license.json",
+		"-license-override-file", overridePath,
+		"-output-html", filepath.Join(dir, "report.html"),
+		"-output-json", filepath.Join(dir, "report.json"),
+		"-output-legal-html", filepath.Join(dir, "legal.html"),
+	}, &bytes.Buffer{})
+	if err == nil {
+		t.Fatal("expected license override validation error")
+	}
+	if !strings.Contains(err.Error(), "license override") || !strings.Contains(err.Error(), "Missing-License-Key") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if _, statErr := os.Stat(filepath.Join(dir, "report.json")); !os.IsNotExist(statErr) {
+		t.Fatalf("expected report output to be absent, stat error = %v", statErr)
+	}
+}
+
+func TestRunLicenseOverrideFileCanUseCustomCatalogKey(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	customCatalogPath := filepath.Join(dir, "custom-catalog.json")
+	testutil.WriteIndentedJSONFixture(t, customCatalogPath, map[string]any{
+		"licenses": []any{
+			map[string]any{
+				"key":                    "Custom-Reviewed",
+				"name":                   "Custom Reviewed License",
+				"family":                 "Custom",
+				"version":                "",
+				"copyleft_strength":      "custom",
+				"requires_manual_review": true,
+				"spdx_ids":               []string{},
+				"names":                  []string{"Custom Reviewed License"},
+				"exact_urls":             []string{},
+				"url_prefixes":           []string{},
+				"contains":               []string{"custom-reviewed-license-marker"},
+				"color":                  "#718096",
+				"risk_level":             "unknown",
+				"notice_template":        "{{.LicenseName}}\n\nPackages: {{.PackageList}}\nManual review required.",
+			},
+		},
+	})
+
+	bundlePath := writeEnglishLicenseTextBundleFixtureWithMutation(t, dir, func(bundle map[string]any) {
+		licenses, ok := bundle["licenses"].([]any)
+		if !ok {
+			t.Fatalf("unexpected licenses payload in bundle fixture")
+		}
+		bundle["licenses"] = append(licenses, map[string]any{
+			"key":         "Custom-Reviewed",
+			"description": "Custom reviewed license description",
+			"obligations": []string{
+				"Retain reviewed notice text.",
+			},
+			"permissions": []string{
+				"Use according to reviewed terms.",
+			},
+			"limitations": []string{
+				"Manual review required.",
+			},
+		})
+	})
+
+	overridePath := filepath.Join(dir, "license-overrides.json")
+	testutil.WriteIndentedJSONFixture(t, overridePath, map[string]any{
+		"version": "v1alpha1",
+		"licenseOverrides": []any{
+			map[string]any{
+				"id":         "widget-custom-reviewed",
+				"licenseKey": "Custom-Reviewed",
+				"match": map[string]any{
+					"purls": []string{"pkg:generic/acme/widget@1.2.3"},
+				},
+			},
+		},
+	})
+
+	jsonPath := filepath.Join(dir, "report.json")
+	if err := run([]string{
+		"-input", "cyclonedx-json=internal/sbom/testdata/cyclonedx/missing-license.json",
+		"-license-catalog", "configs/licenses.json",
+		"-license-catalog", customCatalogPath,
+		"-license-text-bundle", bundlePath,
+		"-license-override-file", overridePath,
+		"-output-html", filepath.Join(dir, "report.html"),
+		"-output-json", jsonPath,
+		"-output-legal-html", filepath.Join(dir, "legal.html"),
+	}, &bytes.Buffer{}); err != nil {
+		t.Fatalf("run with custom catalog license override failed: %v", err)
+	}
+
+	payload, err := os.ReadFile(jsonPath)
+	if err != nil {
+		t.Fatalf("read report json: %v", err)
+	}
+	var output struct {
+		Report struct {
+			Groups []struct {
+				Key      string `json:"key"`
+				Name     string `json:"name"`
+				Packages []struct {
+					Name string `json:"name"`
+				} `json:"packages"`
+			} `json:"groups"`
+		} `json:"report"`
+	}
+	if err := json.Unmarshal(payload, &output); err != nil {
+		t.Fatalf("parse report json: %v", err)
+	}
+
+	for _, group := range output.Report.Groups {
+		if group.Key == "Custom-Reviewed" && group.Name == "Custom Reviewed License" && len(group.Packages) == 1 && group.Packages[0].Name == "acme/widget" {
+			return
+		}
+	}
+	t.Fatalf("expected custom reviewed license group, got %#v", output.Report.Groups)
+}
+
 func TestRunReportJSONUsesSPDXInputKindProvenance(t *testing.T) {
 	t.Parallel()
 

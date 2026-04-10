@@ -1,6 +1,7 @@
 package licenseoverride
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -138,6 +139,37 @@ func TestApplyIfMissingSkipsExistingLicenseAndForceOverrides(t *testing.T) {
 	}
 }
 
+func TestApplyPreservesReviewedRawLicenseEvidenceWhenRuleOmitsRawLicense(t *testing.T) {
+	t.Parallel()
+
+	result, err := Apply(ApplyConfig{
+		Catalog: testCatalog(),
+		Rules: []Rule{{
+			ID:         "custom-reviewed-as-mit",
+			Match:      mustSelector(t, `{"names":["custom-lib"]}`),
+			LicenseKey: "MIT",
+		}},
+	}, inventory.Document{Packages: []inventory.Package{{
+		Provenance: inventory.PackageProvenance{SourceIDs: []string{"sbom"}},
+		Ecosystem:  "generic",
+		Name:       "custom-lib",
+		Version:    "1.0.0",
+		RawLicense: "Custom Notice",
+		LicenseKey: "Unknown",
+	}}})
+	if err != nil {
+		t.Fatalf("apply override: %v", err)
+	}
+
+	pkg := result.Packages[0]
+	if pkg.LicenseKey != "MIT" || pkg.RawLicense != "Custom Notice" {
+		t.Fatalf("package license = %q / %q", pkg.LicenseKey, pkg.RawLicense)
+	}
+	if _, ok := pkg.Provenance.FieldOrigins["rawLicense"]; ok {
+		t.Fatalf("raw license origin should remain unchanged, got %#v", pkg.Provenance.FieldOrigins)
+	}
+}
+
 func TestApplyRejectsMultipleMatchingRules(t *testing.T) {
 	t.Parallel()
 
@@ -153,11 +185,145 @@ func TestApplyRejectsMultipleMatchingRules(t *testing.T) {
 	}
 }
 
+func TestApplyClonesExistingDocumentStateAndSortsDiagnostics(t *testing.T) {
+	t.Parallel()
+
+	doc := inventory.Document{
+		Sources: []inventory.Source{{ID: "repo-scan", Kind: "repository-scan", Location: "."}},
+		Packages: []inventory.Package{{
+			Provenance: inventory.PackageProvenance{
+				SourceIDs:      []string{"repo-scan"},
+				FieldOrigins:   map[string]string{"repository": "repo-scan"},
+				ConflictFields: []string{"repository"},
+			},
+			Ecosystem:  "node",
+			Project:    "web",
+			Name:       "react",
+			Version:    "19.2.4",
+			RawLicense: "Unknown",
+			LicenseKey: "Unknown",
+		}},
+		Conflicts: []inventory.Conflict{{
+			Identity: "node/web/react/19.2.4",
+			Field:    "repository",
+			Values:   []inventory.ConflictValue{{SourceID: "repo-scan", Value: "https://example.test/repo"}},
+		}},
+		Diagnostics: []inventory.Diagnostic{
+			{
+				SourceID:          "z-source",
+				RuleID:            "z-rule",
+				Code:              "existing_z",
+				Severity:          "warn",
+				Message:           "z",
+				MatchedRoots:      []string{"z-root"},
+				RemovedPackages:   []string{"z-removed"},
+				PreservedPackages: []string{"z-preserved"},
+			},
+			{
+				SourceID: "a-source",
+				RuleID:   "a-rule",
+				Code:     "existing_a",
+				Severity: "info",
+				Message:  "a",
+			},
+		},
+	}
+
+	result, err := Apply(ApplyConfig{
+		Catalog:        testCatalog(),
+		SourceLocation: "configs/license-overrides.json",
+		Rules: []Rule{{
+			ID:         "react-mit",
+			Match:      mustSelector(t, `{"names":["react"]}`),
+			LicenseKey: "MIT",
+		}},
+	}, doc)
+	if err != nil {
+		t.Fatalf("apply override: %v", err)
+	}
+	if got := result.Diagnostics[0].SourceID; got != "a-source" {
+		t.Fatalf("expected diagnostics to be sorted, first source = %q", got)
+	}
+	var overrideSource inventory.Source
+	for _, source := range result.Sources {
+		if source.ID == "license-override:react-mit" {
+			overrideSource = source
+		}
+	}
+	if overrideSource.Location != "configs/license-overrides.json" {
+		t.Fatalf("license override source = %#v", overrideSource)
+	}
+
+	result.Packages[0].Provenance.SourceIDs[0] = "mutated-source"
+	result.Packages[0].Provenance.FieldOrigins["repository"] = "mutated-origin"
+	result.Packages[0].Provenance.ConflictFields[0] = "mutated-conflict"
+	result.Conflicts[0].Values[0].Value = "mutated-conflict-value"
+	result.Diagnostics[2].MatchedRoots[0] = "mutated-root"
+	result.Diagnostics[2].RemovedPackages[0] = "mutated-removed"
+	result.Diagnostics[2].PreservedPackages[0] = "mutated-preserved"
+
+	if doc.Packages[0].Provenance.SourceIDs[0] != "repo-scan" ||
+		doc.Packages[0].Provenance.FieldOrigins["repository"] != "repo-scan" ||
+		doc.Packages[0].Provenance.ConflictFields[0] != "repository" {
+		t.Fatalf("package provenance was mutated: %#v", doc.Packages[0].Provenance)
+	}
+	if doc.Conflicts[0].Values[0].Value != "https://example.test/repo" {
+		t.Fatalf("conflict values were mutated: %#v", doc.Conflicts)
+	}
+	if doc.Diagnostics[0].MatchedRoots[0] != "z-root" ||
+		doc.Diagnostics[0].RemovedPackages[0] != "z-removed" ||
+		doc.Diagnostics[0].PreservedPackages[0] != "z-preserved" {
+		t.Fatalf("diagnostics were mutated: %#v", doc.Diagnostics[0])
+	}
+}
+
+func TestApplyUsesFallbackSourceForUnnamedRule(t *testing.T) {
+	t.Parallel()
+
+	result, err := Apply(ApplyConfig{
+		Catalog: testCatalog(),
+		Rules: []Rule{{
+			Match:      mustSelector(t, `{"names":["react"]}`),
+			LicenseKey: "MIT",
+		}},
+	}, inventory.Document{Packages: []inventory.Package{{Name: "react", LicenseKey: "Unknown"}}})
+	if err != nil {
+		t.Fatalf("apply unnamed rule: %v", err)
+	}
+	if got := result.Packages[0].Provenance.FieldOrigins["licenseKey"]; got != "license-override" {
+		t.Fatalf("license origin = %q", got)
+	}
+	if len(result.Sources) != 1 || result.Sources[0].ID != "license-override" || result.Sources[0].Location != "license-override" {
+		t.Fatalf("sources = %#v", result.Sources)
+	}
+}
+
 func TestLoadFileWrapsReadAndParseErrors(t *testing.T) {
 	t.Parallel()
 
 	if _, err := LoadFile(filepath.Join(t.TempDir(), "missing.json"), testCatalog()); err == nil {
 		t.Fatal("expected read error")
+	}
+
+	dir := t.TempDir()
+	brokenPath := filepath.Join(dir, "broken.json")
+	if err := os.WriteFile(brokenPath, []byte(`{"version":"v1alpha1","licenseOverrides":[{"match":{"names":["react"]},"licenseKey":"Missing"}]}`), 0o644); err != nil {
+		t.Fatalf("write broken override: %v", err)
+	}
+	if _, err := LoadFile(brokenPath, testCatalog()); err == nil {
+		t.Fatal("expected parse error")
+	}
+
+	validPath := filepath.Join(dir, "valid.json")
+	if err := os.WriteFile(validPath, []byte(`{"version":"v1alpha1","licenseOverrides":[{"match":{"names":["react"]},"licenseKey":"MIT"}]}`), 0o644); err != nil {
+		t.Fatalf("write valid override: %v", err)
+	}
+	doc, err := LoadFile(validPath, testCatalog())
+	if err != nil {
+		t.Fatalf("load valid override: %v", err)
+	}
+	if len(doc.LicenseOverrides) != 1 || doc.LicenseOverrides[0].LicenseKey != "MIT" {
+		t.Fatalf("loaded override = %#v", doc)
 	}
 }
 

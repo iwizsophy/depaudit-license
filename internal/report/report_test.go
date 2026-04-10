@@ -335,3 +335,38 @@ func TestExportEmbeddedLicenseTextsWritesCopiedFiles(t *testing.T) {
 		t.Fatalf("copied path = %q", copiedPath)
 	}
 }
+
+func TestExportEmbeddedLicenseTextsDisambiguatesDuplicateEvidence(t *testing.T) {
+	t.Parallel()
+
+	outputDir := filepath.Join(t.TempDir(), "license-texts")
+	evidence := LegalNoticeEvidence{
+		Kind:            "embedded-license-text",
+		LicenseFilePath: "LICENSE.txt",
+		Text:            "same license body",
+		Packages: []NoticePackageRef{{
+			Ecosystem: "node",
+			Project:   "web",
+			Name:      "react",
+			Version:   "19.2.4",
+		}},
+	}
+	view := View{LegalNoticeEvidence: []LegalNoticeEvidence{evidence, evidence}}
+
+	updated, exported, err := ExportEmbeddedLicenseTexts(view, LicenseTextExportConfig{
+		OutputDir: outputDir,
+		LinkBase:  "license-texts",
+	})
+	if err != nil {
+		t.Fatalf("ExportEmbeddedLicenseTexts: %v", err)
+	}
+	if len(exported) != 2 {
+		t.Fatalf("exported = %#v", exported)
+	}
+	if exported[0] == exported[1] {
+		t.Fatalf("expected unique exported paths, got %#v", exported)
+	}
+	if updated.LegalNoticeEvidence[0].CopiedFilePath == updated.LegalNoticeEvidence[1].CopiedFilePath {
+		t.Fatalf("expected unique copied paths, got %#v", updated.LegalNoticeEvidence)
+	}
+}

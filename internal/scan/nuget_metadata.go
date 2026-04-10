@@ -359,8 +359,17 @@ func readEmbeddedLicenseFromZip(reader *zip.Reader, licensePath string) string {
 }
 
 func normalizeEmbeddedLicensePath(licensePath string) string {
-	normalized := path.Clean(strings.TrimLeft(filepath.ToSlash(strings.TrimSpace(licensePath)), "/"))
+	value := filepath.ToSlash(strings.TrimSpace(licensePath))
+	if strings.HasPrefix(value, "//") || filepath.VolumeName(filepath.FromSlash(value)) != "" {
+		return ""
+	}
+
+	normalized := path.Clean(strings.TrimLeft(value, "/"))
 	if normalized == "." || normalized == ".." || strings.HasPrefix(normalized, "../") {
+		return ""
+	}
+	platformPath := filepath.FromSlash(normalized)
+	if filepath.VolumeName(platformPath) != "" || filepath.IsAbs(platformPath) {
 		return ""
 	}
 	return normalized

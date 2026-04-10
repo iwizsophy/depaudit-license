@@ -534,6 +534,11 @@ func TestNugetZipHelperBranches(t *testing.T) {
 	if got := readEmbeddedLicenseFromZip(zipReader, "/docs/LICENSE.txt"); got != "zip license" {
 		t.Fatalf("readEmbeddedLicenseFromZip = %q", got)
 	}
+	for _, licensePath := range []string{"../LICENSE.txt", "C:/LICENSE.txt", `\\server\share\LICENSE.txt`} {
+		if got := normalizeEmbeddedLicensePath(licensePath); got != "" {
+			t.Fatalf("normalizeEmbeddedLicensePath(%q) = %q", licensePath, got)
+		}
+	}
 	if got := readEmbeddedLicenseFromZip(zipReader, "missing.txt"); got != "" {
 		t.Fatalf("expected missing zip license to be empty, got %q", got)
 	}

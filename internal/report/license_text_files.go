@@ -81,7 +81,7 @@ func embeddedLicenseTextFilename(originalPath string, text string, index int) st
 
 	sum := sha256.Sum256([]byte(text))
 	hash := hex.EncodeToString(sum[:])[:8]
-	return fmt.Sprintf("%s-%s%s", safeExportPathSegment(stem), hash, extension)
+	return fmt.Sprintf("%s-%s-%d%s", safeExportPathSegment(stem), hash, index, extension)
 }
 
 func safeExportPathSegment(value string) string {

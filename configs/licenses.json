@@ -24,6 +24,14 @@
       "contains": [
         "mit"
       ],
+      "text_matchers": [
+        "MIT License",
+        "Permission is hereby granted",
+        "to deal in the Software without restriction",
+        "The above copyright notice and this permission notice",
+        "THE SOFTWARE IS PROVIDED \"AS IS\""
+      ],
+      "text_match_threshold": 2,
       "color": "#2f855a",
       "risk_level": "low",
       "notice_template": "MIT License\n\nCopyright (c) {{.Year}} {{.Holders}}\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE."
@@ -54,6 +62,16 @@
       "contains": [
         "apache-2.0"
       ],
+      "text_matchers": [
+        "Apache License",
+        "Version 2.0",
+        "January 2004",
+        "Licensed under the Apache License",
+        "You may obtain a copy of the License",
+        "Unless required by applicable law",
+        "limitations under the License"
+      ],
+      "text_match_threshold": 2,
       "color": "#2b6cb0",
       "risk_level": "low",
       "notice_template": "Apache License\nVersion 2.0, January 2004\nhttp://www.apache.org/licenses/\n\nCopyright {{.Year}} {{.Holders}}\n\nLicensed under the Apache License, Version 2.0 (the \"License\");\nyou may not use this file except in compliance with the License.\nYou may obtain a copy of the License at\n\n    http://www.apache.org/licenses/LICENSE-2.0\n\nUnless required by applicable law or agreed to in writing, software\ndistributed under the License is distributed on an \"AS IS\" BASIS,\nWITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\nSee the License for the specific language governing permissions and\nlimitations under the License."

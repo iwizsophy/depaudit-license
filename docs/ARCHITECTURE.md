@@ -11,7 +11,8 @@ The main product boundary is:
 1. load inputs
 2. normalize into inventory
 3. enrich metadata
-4. render report / legal notice / vulnerability outputs
+4. apply package-level license overrides
+5. render report / legal notice / vulnerability outputs
 
 ## Input model
 
@@ -62,6 +63,8 @@ Catalog sources can be layered, and remote catalogs are supported with:
 
 Locale bundles enrich descriptions and obligations without changing the normalized license key structure.
 
+Package-level license overrides are intentionally separate from catalog sources. Catalog overrides normalize raw license evidence globally, while license override files match selected inventory packages and update their `licenseKey` with explicit provenance.
+
 ## Metadata enrichment and provenance
 
 After input loading, ecosystem-aware enrichment can add metadata such as:
@@ -79,6 +82,8 @@ Primary outputs:
 - report HTML
 - report JSON
 - legal notice HTML
+
+When legal notice evidence includes embedded license text from a package-local file, the CLI also writes a raw-text copy next to the legal notice output under `license-texts/...` and exposes the relative path as `copiedFilePath`.
 
 Optional outputs:
 

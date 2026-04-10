@@ -89,7 +89,7 @@ func LoadSPDXJSON(path string, cat *catalog.Catalog) ([]inventory.Package, error
 		}
 
 		rawLicense, embeddedPath, embeddedText := resolveSPDXLicense(pkg, extracted)
-		licenseKey := normalizeCycloneDXLicenseKey(rawLicense, cat)
+		licenseKey := normalizeCycloneDXLicenseKey(rawLicense, embeddedText, cat)
 		repository, purl := resolveSPDXRepositoryAndPURL(pkg.ExternalRefs)
 		holder, year := parseCycloneDXCopyright(pkg.CopyrightText)
 		packageURL := canonicalSPDXPURL(pkg, purl)

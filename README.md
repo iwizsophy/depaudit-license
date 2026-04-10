@@ -146,14 +146,56 @@ License definitions and descriptions:
 - later `-license-catalog` values override earlier sources
 - `-locale` selects `configs/license-texts.<locale>.json`
 - `-license-text-bundle` overrides locale-based bundle resolution
+- `-license-override-file` loads a package-level override JSON for manually resolving licenses such as `Unknown`
 - `-exclude-policy` loads versioned shallow/subgraph exclude policy JSON
 - `-exclude-patterns` remains supported and is internally synthesized as a legacy shallow rule
+
+Package-level license override:
+
+```json
+{
+  "version": "v1alpha1",
+  "licenseOverrides": [
+    {
+      "id": "left-pad-1.3.0-mit",
+      "reason": "Upstream metadata is missing and the package LICENSE file was manually reviewed.",
+      "match": {
+        "ecosystems": ["node"],
+        "names": ["left-pad"],
+        "versions": ["1.3.0"],
+        "purls": ["pkg:npm/left-pad@1.3.0"]
+      },
+      "licenseKey": "MIT",
+      "mode": "ifMissing",
+      "evidence": {
+        "url": "https://github.com/example/left-pad/blob/v1.3.0/LICENSE",
+        "reviewedBy": "manual",
+        "reviewedAt": "2026-04-10",
+        "note": "LICENSE text matches MIT."
+      }
+    }
+  ]
+}
+```
+
+```powershell
+.\depaudit-license-windows-amd64.exe `
+  -input repository-scan=.\my-repository `
+  -license-override-file .\configs\license-overrides.json `
+  -output-html dist\report.html `
+  -output-json dist\report.json `
+  -output-legal-html dist\legal-notice.html
+```
+
+Use `-license-catalog` when a raw license string or URL should normalize to a catalog definition across matching packages. Use `-license-override-file` when only a selected package should be manually resolved. The default `mode` is `ifMissing`, which applies only when `licenseKey` is blank or the fallback (`Unknown`). Use `mode: "force"` to intentionally replace an existing non-fallback license.
 
 Presentation:
 
 - `-template`, `-theme-css`
 - `-legal-template`, `-legal-theme-css`
 - `-vuln-template`, `-vuln-theme-css`
+
+When package-local embedded license text is discovered, the CLI copies that raw text next to the legal notice output under `license-texts/...` and links it from the legal notice HTML / JSON via `copiedFilePath`.
 
 Report / legal notice custom templates can use these helpers:
 
@@ -231,6 +273,8 @@ See also:
 
 - [configs/exclude-policy.sample.json](configs/exclude-policy.sample.json)
 - [configs/exclude-policy.schema.json](configs/exclude-policy.schema.json)
+- [configs/license-overrides.sample.json](configs/license-overrides.sample.json)
+- [configs/license-overrides.schema.json](configs/license-overrides.schema.json)
 
 ## Versioning and compatibility
 

@@ -176,8 +176,15 @@ func TestCycloneDXHelperFunctions(t *testing.T) {
 	if got := canonicalCycloneDXPURL(cycloneDXComponent{Name: "react", Version: "18.2.0"}); got != "pkg:generic/react@18.2.0" {
 		t.Fatalf("canonicalCycloneDXPURL fallback = %q", got)
 	}
-	if got := normalizeCycloneDXLicenseKey("MIT OR Apache-2.0", cat); got != "Unknown" {
+	if got := normalizeCycloneDXLicenseKey("MIT OR Apache-2.0", "", cat); got != "Unknown" {
 		t.Fatalf("normalizeCycloneDXLicenseKey compound = %q", got)
+	}
+	realCatalog, err := catalog.Load(filepath.Join("..", "..", "configs", "licenses.json"))
+	if err != nil {
+		t.Fatalf("load catalog: %v", err)
+	}
+	if got := normalizeCycloneDXLicenseKey("LicenseRef-MIT", "MIT License\n\nCopyright (c) 2024 Example", realCatalog); got != "MIT" {
+		t.Fatalf("normalizeCycloneDXLicenseKey embedded text = %q", got)
 	}
 	if !isCompoundLicenseExpression("MIT OR Apache-2.0") {
 		t.Fatal("expected compound expression")

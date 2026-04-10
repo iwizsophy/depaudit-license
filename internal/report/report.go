@@ -70,6 +70,7 @@ type LegalNoticeEvidence struct {
 	Title           string             `json:"title"`
 	LicenseName     string             `json:"licenseName,omitempty"`
 	LicenseFilePath string             `json:"licenseFilePath,omitempty"`
+	CopiedFilePath  string             `json:"copiedFilePath,omitempty"`
 	Text            string             `json:"text"`
 	Packages        []NoticePackageRef `json:"packages"`
 }

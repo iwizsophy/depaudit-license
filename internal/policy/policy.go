@@ -184,6 +184,13 @@ func (s *Selector) validate(prefix string) error {
 	return nil
 }
 
+func ValidateSelector(selector Selector) (Selector, error) {
+	if err := selector.validate("match"); err != nil {
+		return Selector{}, err
+	}
+	return selector, nil
+}
+
 func normalizeStrings(values []string) []string {
 	if len(values) == 0 {
 		return nil

@@ -146,14 +146,56 @@ macOS:
 - `-license-catalog` は後ろに指定した source が前の source を上書きします
 - `-locale` は `configs/license-texts.<locale>.json` を選びます
 - `-license-text-bundle` を指定すると locale ベース解決よりそのパスを優先します
+- `-license-override-file` は `Unknown` など未解決の license を package 単位で手動解決する override JSON を読み込みます
 - `-exclude-policy` は versioned な shallow/subgraph exclude policy JSON を読み込みます
 - `-exclude-patterns` は引き続き利用でき、内部的には legacy shallow rule として扱われます
+
+package 単位の license override:
+
+```json
+{
+  "version": "v1alpha1",
+  "licenseOverrides": [
+    {
+      "id": "left-pad-1.3.0-mit",
+      "reason": "Upstream metadata is missing and the package LICENSE file was manually reviewed.",
+      "match": {
+        "ecosystems": ["node"],
+        "names": ["left-pad"],
+        "versions": ["1.3.0"],
+        "purls": ["pkg:npm/left-pad@1.3.0"]
+      },
+      "licenseKey": "MIT",
+      "mode": "ifMissing",
+      "evidence": {
+        "url": "https://github.com/example/left-pad/blob/v1.3.0/LICENSE",
+        "reviewedBy": "manual",
+        "reviewedAt": "2026-04-10",
+        "note": "LICENSE text matches MIT."
+      }
+    }
+  ]
+}
+```
+
+```powershell
+.\depaudit-license-windows-amd64.exe `
+  -input repository-scan=.\my-repository `
+  -license-override-file .\configs\license-overrides.json `
+  -output-html dist\report.html `
+  -output-json dist\report.json `
+  -output-legal-html dist\legal-notice.html
+```
+
+`-license-catalog` は raw license 文字列や URL の正規化に使い、同じ raw license に一致する package 全体へ効きます。特定 package だけを手動解決したい場合は `-license-override-file` を使います。既定の `mode` は `ifMissing` で、`licenseKey` が空または fallback (`Unknown`) の場合だけ適用します。既存の非 fallback license を上書きする場合は `mode: "force"` を明示します。
 
 見た目:
 
 - `-template`, `-theme-css`
 - `-legal-template`, `-legal-theme-css`
 - `-vuln-template`, `-vuln-theme-css`
+
+package 内の同梱ライセンス本文を検出した場合、CLI は legal notice 出力の隣に `license-texts/...` として原文をコピーし、legal notice HTML / JSON から `copiedFilePath` で参照できるようにします。
 
 report / legal notice の custom template で使える helper:
 
@@ -231,6 +273,8 @@ remote catalog の挙動:
 
 - [configs/exclude-policy.sample.json](configs/exclude-policy.sample.json)
 - [configs/exclude-policy.schema.json](configs/exclude-policy.schema.json)
+- [configs/license-overrides.sample.json](configs/license-overrides.sample.json)
+- [configs/license-overrides.schema.json](configs/license-overrides.schema.json)
 
 ## バージョニングと互換性
 

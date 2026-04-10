@@ -229,6 +229,43 @@ func TestParseFlagsLoadsExcludePolicyFile(t *testing.T) {
 	}
 }
 
+func TestParseFlagsResolvesLicenseOverrideFile(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	overridePath := filepath.Join(dir, "license-overrides.json")
+	if err := os.WriteFile(overridePath, []byte(`{
+  "version": "v1alpha1",
+  "licenseOverrides": [
+    {
+      "id": "react-mit",
+      "match": {
+        "names": ["react"]
+      },
+      "licenseKey": "MIT"
+    }
+  ]
+}`), 0o644); err != nil {
+		t.Fatalf("write license override: %v", err)
+	}
+
+	cfg, err := parseFlags([]string{"-license-override-file", overridePath})
+	if err != nil {
+		t.Fatalf("parse flags: %v", err)
+	}
+	if cfg.licenseOverridePath != overridePath {
+		t.Fatalf("unexpected license override path: %q", cfg.licenseOverridePath)
+	}
+}
+
+func TestParseFlagsRejectsMissingLicenseOverrideFile(t *testing.T) {
+	t.Parallel()
+
+	if _, err := parseFlags([]string{"-license-override-file", filepath.Join(t.TempDir(), "missing.json")}); err == nil {
+		t.Fatal("expected missing license override file error")
+	}
+}
+
 func TestParseFlagsSynthesizesLegacyExcludePatternsIntoPolicy(t *testing.T) {
 	t.Parallel()
 

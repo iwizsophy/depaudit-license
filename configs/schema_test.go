@@ -126,6 +126,45 @@ func TestExcludePolicySchemaRejectsBrokenSelector(t *testing.T) {
 	}
 }
 
+func TestLicenseOverridesSampleMatchesSchema(t *testing.T) {
+	t.Parallel()
+
+	schema := mustCompileSchema(t, "license-overrides.schema.json")
+	doc := mustReadJSON(t, "license-overrides.sample.json")
+
+	if err := schema.Validate(doc); err != nil {
+		t.Fatalf("validate license-overrides.sample.json: %v", err)
+	}
+}
+
+func TestLicenseOverridesSchemaRejectsMissingLicenseKey(t *testing.T) {
+	t.Parallel()
+
+	schema := mustCompileSchema(t, "license-overrides.schema.json")
+	doc := mustReadJSON(t, "license-overrides.sample.json")
+
+	root, ok := doc.(map[string]any)
+	if !ok {
+		t.Fatalf("unexpected root type %T", doc)
+	}
+
+	rules, ok := root["licenseOverrides"].([]any)
+	if !ok || len(rules) == 0 {
+		t.Fatalf("unexpected licenseOverrides payload")
+	}
+
+	first, ok := rules[0].(map[string]any)
+	if !ok {
+		t.Fatalf("unexpected license override type %T", rules[0])
+	}
+
+	delete(first, "licenseKey")
+
+	if err := schema.Validate(doc); err == nil {
+		t.Fatalf("expected schema validation to fail")
+	}
+}
+
 func mustCompileSchema(t *testing.T, name string) *jsonschema.Schema {
 	t.Helper()
 

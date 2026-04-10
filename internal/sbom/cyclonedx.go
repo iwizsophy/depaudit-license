@@ -98,7 +98,7 @@ func LoadCycloneDXJSON(path string, cat *catalog.Catalog) ([]inventory.Package, 
 		}
 
 		rawLicense, embeddedPath, embeddedText := resolveCycloneDXLicense(component)
-		licenseKey := normalizeCycloneDXLicenseKey(rawLicense, cat)
+		licenseKey := normalizeCycloneDXLicenseKey(rawLicense, embeddedText, cat)
 		repository, homepage := resolveCycloneDXURLs(component.ExternalReferences)
 		holder, year := parseCycloneDXCopyright(component.Copyright)
 		packageURL := canonicalCycloneDXPURL(component)
@@ -392,11 +392,22 @@ func uniqueStrings(values []string) []string {
 	return result
 }
 
-func normalizeCycloneDXLicenseKey(raw string, cat *catalog.Catalog) string {
+func normalizeCycloneDXLicenseKey(raw string, embeddedText string, cat *catalog.Catalog) string {
+	if cat == nil {
+		return ""
+	}
 	if isCompoundLicenseExpression(raw) {
 		return cat.Fallback
 	}
 	key, _ := cat.Normalize(raw)
+	if strings.TrimSpace(key) != "" && key != cat.Fallback {
+		return key
+	}
+	if strings.TrimSpace(embeddedText) != "" {
+		if textKey, _ := cat.NormalizeText(embeddedText); strings.TrimSpace(textKey) != "" && textKey != cat.Fallback {
+			return textKey
+		}
+	}
 	return key
 }
 

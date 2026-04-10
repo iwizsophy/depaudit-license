@@ -1,0 +1,119 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://depaudit-license.local/configs/license-overrides.schema.json",
+  "title": "depaudit-license package license overrides",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version"],
+  "properties": {
+    "version": {
+      "type": "string",
+      "const": "v1alpha1"
+    },
+    "licenseOverrides": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/licenseOverride"
+      }
+    }
+  },
+  "$defs": {
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "stringList": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/nonEmptyString"
+      }
+    },
+    "selector": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ecosystems": {
+          "$ref": "#/$defs/stringList"
+        },
+        "names": {
+          "$ref": "#/$defs/stringList"
+        },
+        "nameGlobs": {
+          "$ref": "#/$defs/stringList"
+        },
+        "versions": {
+          "$ref": "#/$defs/stringList"
+        },
+        "projects": {
+          "$ref": "#/$defs/stringList"
+        },
+        "dependencyTypes": {
+          "$ref": "#/$defs/stringList"
+        },
+        "hasRuntimeAssets": {
+          "type": "boolean"
+        },
+        "purls": {
+          "$ref": "#/$defs/stringList"
+        }
+      },
+      "anyOf": [
+        { "required": ["ecosystems"] },
+        { "required": ["names"] },
+        { "required": ["nameGlobs"] },
+        { "required": ["versions"] },
+        { "required": ["projects"] },
+        { "required": ["dependencyTypes"] },
+        { "required": ["hasRuntimeAssets"] },
+        { "required": ["purls"] }
+      ]
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "url": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "reviewedBy": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "reviewedAt": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "note": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "licenseOverride": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["match", "licenseKey"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "reason": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "match": {
+          "$ref": "#/$defs/selector"
+        },
+        "licenseKey": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "rawLicense": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "mode": {
+          "type": "string",
+          "enum": ["ifMissing", "force"]
+        },
+        "evidence": {
+          "$ref": "#/$defs/evidence"
+        }
+      }
+    }
+  }
+}

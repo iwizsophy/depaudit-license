@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -368,6 +369,100 @@ func TestMetadataLookupServiceEnrichPackageUsesDotNetMetadata(t *testing.T) {
 	}
 	if !slices.Equal(pkg.Provenance.SourceIDs, []string{"enrich:nuget-global-packages", "repo-scan"}) {
 		t.Fatalf("source ids = %#v", pkg.Provenance.SourceIDs)
+	}
+}
+
+func TestMetadataLookupServiceEnrichPackageResolvesNodeLicenseFileText(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	packageDir := filepath.Join(root, "web", "node_modules", "file-licensed")
+	if err := os.MkdirAll(packageDir, 0o755); err != nil {
+		t.Fatalf("mkdir package dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(packageDir, "package.json"), []byte(`{
+  "name": "file-licensed",
+  "version": "1.0.0",
+  "license": "LICENSE.txt",
+  "author": "Example Author"
+}`), 0o644); err != nil {
+		t.Fatalf("write package.json: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(packageDir, "LICENSE.txt"), []byte("MIT License\n\nCopyright (c) 2024 Example"), 0o644); err != nil {
+		t.Fatalf("write license file: %v", err)
+	}
+
+	cat, err := catalog.Load(filepath.Join("..", "..", "configs", "licenses.json"))
+	if err != nil {
+		t.Fatalf("load catalog: %v", err)
+	}
+
+	service := NewMetadataLookupService(MetadataLookupConfig{
+		Catalog:         cat,
+		RepositoryRoots: []string{root},
+	})
+	pkg, _, changed := service.EnrichPackage(inventory.Package{
+		Ecosystem:  "node",
+		Project:    "web",
+		Name:       "file-licensed",
+		Version:    "1.0.0",
+		LicenseKey: cat.Fallback,
+	})
+	if !changed {
+		t.Fatal("expected package to be enriched")
+	}
+	if pkg.RawLicense != "LICENSE.txt" || pkg.LicenseKey != "MIT" {
+		t.Fatalf("license enrichment = %#v", pkg)
+	}
+	if pkg.EmbeddedLicensePath != "LICENSE.txt" || !strings.Contains(pkg.EmbeddedLicenseText, "MIT License") {
+		t.Fatalf("embedded license = %#v", pkg)
+	}
+}
+
+func TestMetadataLookupServiceEnrichPackageResolvesNuGetLicenseFileText(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	packageDir := filepath.Join(root, "file.licensed", "1.0.0")
+	if err := os.MkdirAll(packageDir, 0o755); err != nil {
+		t.Fatalf("mkdir nuget dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(packageDir, "file.licensed.nuspec"), []byte(`<?xml version="1.0" encoding="utf-8"?>
+<package>
+  <metadata>
+    <authors>Example Author</authors>
+    <license type="file">LICENSE.txt</license>
+  </metadata>
+</package>`), 0o644); err != nil {
+		t.Fatalf("write nuspec: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(packageDir, "LICENSE.txt"), []byte("Apache License\nVersion 2.0, January 2004\nhttp://www.apache.org/licenses/"), 0o644); err != nil {
+		t.Fatalf("write license file: %v", err)
+	}
+
+	cat, err := catalog.Load(filepath.Join("..", "..", "configs", "licenses.json"))
+	if err != nil {
+		t.Fatalf("load catalog: %v", err)
+	}
+
+	service := NewMetadataLookupService(MetadataLookupConfig{
+		Catalog:                 cat,
+		NuGetGlobalPackagesRoot: root,
+	})
+	pkg, _, changed := service.EnrichPackage(inventory.Package{
+		Ecosystem:  "dotnet",
+		Name:       "File.Licensed",
+		Version:    "1.0.0",
+		LicenseKey: cat.Fallback,
+	})
+	if !changed {
+		t.Fatal("expected package to be enriched")
+	}
+	if pkg.RawLicense != "LICENSE.txt" || pkg.LicenseKey != "Apache-2.0" {
+		t.Fatalf("license enrichment = %#v", pkg)
+	}
+	if pkg.EmbeddedLicensePath != "LICENSE.txt" || !strings.Contains(pkg.EmbeddedLicenseText, "Apache License") {
+		t.Fatalf("embedded license = %#v", pkg)
 	}
 }
 

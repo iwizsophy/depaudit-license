@@ -1,0 +1,23 @@
+{
+  "version": "v1alpha1",
+  "licenseOverrides": [
+    {
+      "id": "left-pad-1.3.0-mit",
+      "reason": "Upstream metadata is missing and the package LICENSE file was manually reviewed.",
+      "match": {
+        "ecosystems": ["node"],
+        "names": ["left-pad"],
+        "versions": ["1.3.0"],
+        "purls": ["pkg:npm/left-pad@1.3.0"]
+      },
+      "licenseKey": "MIT",
+      "mode": "ifMissing",
+      "evidence": {
+        "url": "https://github.com/example/left-pad/blob/v1.3.0/LICENSE",
+        "reviewedBy": "manual",
+        "reviewedAt": "2026-04-10",
+        "note": "LICENSE text matches MIT."
+      }
+    }
+  ]
+}

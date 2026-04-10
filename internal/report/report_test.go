@@ -22,7 +22,6 @@ func setTestNow(t *testing.T, instant time.Time) {
 }
 
 func TestBuildFiltersProductionAndRendersNotice(t *testing.T) {
-	t.Parallel()
 	setTestNow(t, time.Date(2026, time.April, 4, 11, 0, 0, 0, time.UTC))
 
 	cat := &catalog.Catalog{
@@ -192,7 +191,6 @@ func TestBuildDocumentPolicyShallowExcludeMatchesLegacyPatterns(t *testing.T) {
 }
 
 func TestMinYearFallsBackToPackageClockYear(t *testing.T) {
-	t.Parallel()
 	setTestNow(t, time.Date(2032, time.January, 2, 0, 0, 0, 0, time.UTC))
 
 	if got := minYear([]inventory.Package{{Name: "pkg"}}); got != 2032 {

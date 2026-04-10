@@ -360,6 +360,8 @@ func TestApplyTextBundleClonesCatalogStructureAndTextSlices(t *testing.T) {
       "exact_urls": ["https://licenses.example.test/MIT"],
       "url_prefixes": ["https://opensource.org/licenses/mit"],
       "contains": ["license=mit"],
+      "text_matchers": ["MIT License"],
+      "text_match_threshold": 1,
       "description": "base desc",
       "obligations": ["base obligation"],
       "permissions": ["base permission"],
@@ -421,6 +423,9 @@ func TestApplyTextBundleClonesCatalogStructureAndTextSlices(t *testing.T) {
 	}
 	if &localized.contains[0] == &cat.contains[0] {
 		t.Fatal("expected contains slice to be cloned")
+	}
+	if &localized.text[0] == &cat.text[0] {
+		t.Fatal("expected text matcher slice to be cloned")
 	}
 	localized.exact["mit"] = "Unknown"
 	if got := cat.exact["mit"]; got != "MIT" {

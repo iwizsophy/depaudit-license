@@ -154,6 +154,13 @@ func run(args []string, stdout io.Writer) error {
 		ExcludePatterns: cfg.excludePatterns,
 		ShallowRules:    cfg.excludePolicy.ShallowExcludes,
 	}, inputResult.Document, cat)
+	view, _, err = report.ExportEmbeddedLicenseTexts(view, report.LicenseTextExportConfig{
+		OutputDir: filepath.Join(filepath.Dir(cfg.outputLegalNoticeHTML), "license-texts"),
+		LinkBase:  "license-texts",
+	})
+	if err != nil {
+		return err
+	}
 
 	html, err := report.RenderHTML(view, templatePath, themeCSSPath)
 	if err != nil {

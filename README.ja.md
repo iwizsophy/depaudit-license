@@ -155,6 +155,8 @@ macOS:
 - `-legal-template`, `-legal-theme-css`
 - `-vuln-template`, `-vuln-theme-css`
 
+package 内の同梱ライセンス本文を検出した場合、CLI は legal notice 出力の隣に `license-texts/...` として原文をコピーし、legal notice HTML / JSON から `copiedFilePath` で参照できるようにします。
+
 report / legal notice の custom template で使える helper:
 
 - `slug`

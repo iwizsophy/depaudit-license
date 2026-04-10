@@ -396,8 +396,10 @@ func (r *nodeResolver) resolveFromInstalledPackage(packageName string, version s
 		return metadata{}, false
 	}
 
+	rawLicense := parseLicense(file.License)
+	licensePath, licenseText := resolveNodeEmbeddedLicense(packageJSON, rawLicense)
 	meta := metadata{
-		RawLicense: parseLicense(file.License),
+		RawLicense: rawLicense,
 		Repository: parseRepository(file.Repository),
 		Homepage:   strings.TrimSpace(file.Homepage),
 		Holder: firstNonEmpty(
@@ -406,13 +408,63 @@ func (r *nodeResolver) resolveFromInstalledPackage(packageName string, version s
 			firstNonEmpty(parsePeople(file.Contributors)...),
 			packageName,
 		),
-		Year:   now().Year(),
-		Source: "node-modules",
+		Year:                now().Year(),
+		Source:              "node-modules",
+		EmbeddedLicensePath: licensePath,
+		EmbeddedLicenseText: licenseText,
 	}
 	if strings.TrimSpace(meta.RawLicense) == "" {
 		meta.RawLicense = "Unknown"
 	}
 	return meta, true
+}
+
+func resolveNodeEmbeddedLicense(packageJSONPath string, rawLicense string) (string, string) {
+	licensePath := embeddedLicenseFileCandidate(rawLicense)
+	if licensePath == "" {
+		return "", ""
+	}
+	licenseText := readEmbeddedLicenseFromDirectory(filepath.Dir(packageJSONPath), licensePath)
+	if strings.TrimSpace(licenseText) == "" {
+		return "", ""
+	}
+	return licensePath, licenseText
+}
+
+func embeddedLicenseFileCandidate(rawLicense string) string {
+	value := strings.TrimSpace(rawLicense)
+	if value == "" || strings.ContainsAny(value, "\r\n") || strings.Contains(value, "://") {
+		return ""
+	}
+
+	const seeLicensePrefix = "see license in "
+	if strings.HasPrefix(strings.ToLower(value), seeLicensePrefix) {
+		value = strings.TrimSpace(value[len(seeLicensePrefix):])
+	}
+	value = strings.Trim(strings.TrimSpace(value), "`'\"")
+	if value == "" {
+		return ""
+	}
+
+	normalized := normalizeEmbeddedLicensePath(value)
+	if normalized == "" {
+		return ""
+	}
+	base := strings.ToLower(filepath.Base(filepath.FromSlash(normalized)))
+	stem := strings.TrimSuffix(base, filepath.Ext(base))
+	switch {
+	case stem == "license",
+		stem == "licence",
+		stem == "copying",
+		stem == "notice",
+		stem == "copyright",
+		stem == "unlicense",
+		strings.HasPrefix(stem, "license-"),
+		strings.HasPrefix(stem, "licence-"):
+		return normalized
+	default:
+		return ""
+	}
 }
 
 func installedNodePackageJSONPath(projectDir string, packageName string) string {

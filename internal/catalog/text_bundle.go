@@ -88,6 +88,7 @@ func ApplyTextBundle(cat *Catalog, bundle *TextBundle) (*Catalog, error) {
 		Definitions: make(map[string]Definition, len(cat.Definitions)),
 		exact:       mapsClone(cat.exact),
 		contains:    append([]aliasMatch(nil), cat.contains...),
+		text:        cloneTextMatches(cat.text),
 	}
 	for key, def := range cat.Definitions {
 		text := bundle.ByKey[key]
@@ -98,6 +99,19 @@ func ApplyTextBundle(cat *Catalog, bundle *TextBundle) (*Catalog, error) {
 		clone.Definitions[key] = def
 	}
 	return clone, nil
+}
+
+func cloneTextMatches(source []textMatch) []textMatch {
+	if len(source) == 0 {
+		return nil
+	}
+	clone := make([]textMatch, len(source))
+	for index, match := range source {
+		clone[index] = match
+		clone[index].required = append([]string(nil), match.required...)
+		clone[index].phrases = append([]string(nil), match.phrases...)
+	}
+	return clone
 }
 
 func mapsClone(source map[string]string) map[string]string {

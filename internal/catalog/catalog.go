@@ -24,6 +24,9 @@ type Definition struct {
 	ExactURLs            []string `json:"exact_urls"`
 	URLPrefixes          []string `json:"url_prefixes"`
 	Contains             []string `json:"contains"`
+	TextMatchers         []string `json:"text_matchers"`
+	TextMatchThreshold   int      `json:"text_match_threshold,omitempty"`
+	RequiredPhrases      []string `json:"required_phrases"`
 	Description          string   `json:"description"`
 	Obligations          []string `json:"obligations"`
 	Permissions          []string `json:"permissions"`
@@ -43,11 +46,20 @@ type Catalog struct {
 	Definitions map[string]Definition
 	exact       map[string]string
 	contains    []aliasMatch
+	text        []textMatch
 }
 
 type aliasMatch struct {
 	alias string
 	key   string
+}
+
+type textMatch struct {
+	key         string
+	required    []string
+	phrases     []string
+	threshold   int
+	specificity int
 }
 
 func Load(path string) (*Catalog, error) {
@@ -281,6 +293,7 @@ func newCatalog(file fileFormat) (*Catalog, error) {
 		for _, contains := range def.Contains {
 			cat.registerContains(contains, def.Key)
 		}
+		cat.registerTextMatchers(def)
 	}
 
 	if strings.TrimSpace(cat.Fallback) == "" {
@@ -293,6 +306,9 @@ func newCatalog(file fileFormat) (*Catalog, error) {
 
 	slices.SortFunc(cat.contains, func(a, b aliasMatch) int {
 		return len(b.alias) - len(a.alias)
+	})
+	slices.SortFunc(cat.text, func(a, b textMatch) int {
+		return b.specificity - a.specificity
 	})
 
 	return cat, nil
@@ -318,6 +334,36 @@ func (c *Catalog) Normalize(raw string) (string, Definition) {
 		}
 	}
 
+	return c.Fallback, c.Definitions[c.Fallback]
+}
+
+func (c *Catalog) NormalizeText(raw string) (string, Definition) {
+	normalized := normalizeLicenseText(raw)
+	if normalized == "" {
+		return c.Fallback, c.Definitions[c.Fallback]
+	}
+
+	var best textMatch
+	found := false
+	bestScore := -1
+	for _, candidate := range c.text {
+		if !requiredPhrasesMatch(normalized, candidate.required) {
+			continue
+		}
+		score := phraseMatchScore(normalized, candidate.phrases)
+		if score < candidate.threshold {
+			continue
+		}
+		if !found || score > bestScore || (score == bestScore && candidate.specificity > best.specificity) {
+			best = candidate
+			found = true
+			bestScore = score
+		}
+	}
+
+	if found {
+		return best.key, c.Definitions[best.key]
+	}
 	return c.Fallback, c.Definitions[c.Fallback]
 }
 
@@ -348,12 +394,138 @@ func (c *Catalog) registerContains(value string, key string) {
 	}
 }
 
+func (c *Catalog) registerTextMatchers(def Definition) {
+	if def.RequiresManualReview || def.Key == c.Fallback {
+		return
+	}
+
+	if len(def.TextMatchers) > 0 || len(def.RequiredPhrases) > 0 {
+		c.registerTextMatch(def.Key, def.RequiredPhrases, def.TextMatchers, def.TextMatchThreshold)
+	}
+
+	for _, value := range noticeTemplateTextMatchers(def.NoticeTemplate) {
+		c.registerTextMatch(def.Key, nil, []string{value}, 1)
+	}
+}
+
+func (c *Catalog) registerTextMatch(key string, required []string, phrases []string, threshold int) {
+	match := textMatch{
+		key:       key,
+		required:  normalizeTextPhrases(required),
+		phrases:   normalizeTextPhrases(phrases),
+		threshold: threshold,
+	}
+	if len(match.phrases) == 0 && len(match.required) == 0 {
+		return
+	}
+	if len(match.phrases) == 0 {
+		match.threshold = 0
+	} else if match.threshold <= 0 {
+		match.threshold = len(match.phrases)
+	}
+	match.specificity = textMatchSpecificity(match)
+	c.text = append(c.text, match)
+}
+
+func normalizeTextPhrases(values []string) []string {
+	result := make([]string, 0, len(values))
+	seen := map[string]struct{}{}
+	for _, value := range values {
+		normalized := normalizeLicenseText(value)
+		if len(normalized) < 8 {
+			continue
+		}
+		if _, ok := seen[normalized]; ok {
+			continue
+		}
+		seen[normalized] = struct{}{}
+		result = append(result, normalized)
+	}
+	return result
+}
+
+func requiredPhrasesMatch(normalized string, phrases []string) bool {
+	for _, phrase := range phrases {
+		if !strings.Contains(normalized, phrase) {
+			return false
+		}
+	}
+	return true
+}
+
+func phraseMatchScore(normalized string, phrases []string) int {
+	score := 0
+	for _, phrase := range phrases {
+		if strings.Contains(normalized, phrase) {
+			score++
+		}
+	}
+	return score
+}
+
+func textMatchSpecificity(match textMatch) int {
+	total := 0
+	for _, phrase := range match.required {
+		total += len(phrase)
+	}
+	for _, phrase := range match.phrases {
+		total += len(phrase)
+	}
+	return total
+}
+
 func normalizeText(value string) string {
 	value = strings.TrimSpace(strings.ToLower(value))
 	value = strings.ReplaceAll(value, "_", "-")
 	value = strings.ReplaceAll(value, "\"", "")
 	value = strings.ReplaceAll(value, "'", "")
 	return value
+}
+
+func normalizeLicenseText(value string) string {
+	value = normalizeText(value)
+	return strings.Join(strings.Fields(value), " ")
+}
+
+func noticeTemplateTextMatchers(value string) []string {
+	var matchers []string
+	for _, segment := range literalTemplateSegments(value) {
+		normalized := normalizeLicenseText(segment)
+		if len(normalized) < 16 {
+			continue
+		}
+		if strings.HasPrefix(normalized, "covered software in this report") ||
+			strings.HasPrefix(normalized, "packages:") ||
+			strings.HasPrefix(normalized, "copyright holders:") {
+			continue
+		}
+		matchers = append(matchers, normalized)
+		if header, _, ok := strings.Cut(normalized, " copyright"); ok && len(header) >= 16 {
+			matchers = append(matchers, header)
+		}
+		return matchers
+	}
+	return nil
+}
+
+func literalTemplateSegments(value string) []string {
+	var segments []string
+	remaining := value
+	for {
+		start := strings.Index(remaining, "{{")
+		if start < 0 {
+			segments = append(segments, remaining)
+			break
+		}
+		segments = append(segments, remaining[:start])
+		remaining = remaining[start+2:]
+		end := strings.Index(remaining, "}}")
+		if end < 0 {
+			break
+		}
+		remaining = remaining[end+2:]
+	}
+	return segments
 }
 
 func normalizationCandidates(raw string) []string {
@@ -417,6 +589,15 @@ func validateDefinition(def Definition) error {
 	if !hasMatchers(def) {
 		return fmt.Errorf("license %q does not define any matchers", def.Key)
 	}
+	if def.TextMatchThreshold < 0 {
+		return fmt.Errorf("license %q has invalid text_match_threshold %d", def.Key, def.TextMatchThreshold)
+	}
+	if def.TextMatchThreshold > 0 && len(def.TextMatchers) == 0 {
+		return fmt.Errorf("license %q text_match_threshold requires text_matchers", def.Key)
+	}
+	if def.TextMatchThreshold > len(def.TextMatchers) {
+		return fmt.Errorf("license %q text_match_threshold exceeds text_matchers length", def.Key)
+	}
 
 	for _, exactURL := range def.ExactURLs {
 		if err := validateAbsoluteURL(exactURL); err != nil {
@@ -437,7 +618,9 @@ func hasMatchers(def Definition) bool {
 		len(def.Names) > 0 ||
 		len(def.ExactURLs) > 0 ||
 		len(def.URLPrefixes) > 0 ||
-		len(def.Contains) > 0
+		len(def.Contains) > 0 ||
+		len(def.TextMatchers) > 0 ||
+		len(def.RequiredPhrases) > 0
 }
 
 func isAllowedRiskLevel(value string) bool {

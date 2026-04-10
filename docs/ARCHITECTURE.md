@@ -80,6 +80,8 @@ Primary outputs:
 - report JSON
 - legal notice HTML
 
+When legal notice evidence includes embedded license text from a package-local file, the CLI also writes a raw-text copy next to the legal notice output under `license-texts/...` and exposes the relative path as `copiedFilePath`.
+
 Optional outputs:
 
 - vulnerability HTML

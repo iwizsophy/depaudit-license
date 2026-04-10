@@ -1,6 +1,9 @@
 package report
 
 import (
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -286,5 +289,49 @@ func TestProductionGroupsAndLegalNoticeEvidenceHelpers(t *testing.T) {
 	}
 	if evidence[0].Kind != "embedded-license-text" || evidence[1].Kind != "license-notice" {
 		t.Fatalf("unexpected evidence ordering = %#v", evidence)
+	}
+}
+
+func TestExportEmbeddedLicenseTextsWritesCopiedFiles(t *testing.T) {
+	t.Parallel()
+
+	outputDir := filepath.Join(t.TempDir(), "license-texts")
+	view := View{
+		LegalNoticeEvidence: []LegalNoticeEvidence{{
+			Kind:            "embedded-license-text",
+			Source:          "embedded-license-file",
+			Title:           "react",
+			LicenseFilePath: "docs/LICENSE.txt",
+			Text:            "MIT License body",
+			Packages: []NoticePackageRef{{
+				Ecosystem: "node",
+				Project:   "web",
+				Name:      "@scope/react",
+				Version:   "19.2.4",
+			}},
+		}},
+	}
+
+	updated, exported, err := ExportEmbeddedLicenseTexts(view, LicenseTextExportConfig{
+		OutputDir: outputDir,
+		LinkBase:  "license-texts",
+	})
+	if err != nil {
+		t.Fatalf("ExportEmbeddedLicenseTexts: %v", err)
+	}
+	if len(exported) != 1 {
+		t.Fatalf("exported = %#v", exported)
+	}
+	payload, err := os.ReadFile(exported[0])
+	if err != nil {
+		t.Fatalf("read exported license: %v", err)
+	}
+	if string(payload) != "MIT License body" {
+		t.Fatalf("exported payload = %q", string(payload))
+	}
+	copiedPath := updated.LegalNoticeEvidence[0].CopiedFilePath
+	if !strings.HasPrefix(copiedPath, "license-texts/node/web/scope-react/19-2-4/license-") ||
+		!strings.HasSuffix(copiedPath, ".txt") {
+		t.Fatalf("copied path = %q", copiedPath)
 	}
 }

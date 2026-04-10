@@ -82,6 +82,65 @@ func TestRunGeneratesOutputs(t *testing.T) {
 	}
 }
 
+func TestRunCopiesEmbeddedLicenseFiles(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	repo := filepath.Join(dir, "repo")
+	packageDir := filepath.Join(repo, "node_modules", "file-licensed")
+	if err := os.MkdirAll(packageDir, 0o755); err != nil {
+		t.Fatalf("mkdir package dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(repo, "package.json"), []byte(`{
+  "name": "app",
+  "dependencies": {
+    "file-licensed": "1.0.0"
+  }
+}`), 0o644); err != nil {
+		t.Fatalf("write app package.json: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(packageDir, "package.json"), []byte(`{
+  "name": "file-licensed",
+  "version": "1.0.0",
+  "license": "LICENSE.txt"
+}`), 0o644); err != nil {
+		t.Fatalf("write dependency package.json: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(packageDir, "LICENSE.txt"), []byte("MIT License\n\nPermission is hereby granted"), 0o644); err != nil {
+		t.Fatalf("write license file: %v", err)
+	}
+
+	outputs := newCLIOutputPaths(filepath.Join(dir, "out"))
+	var stdout bytes.Buffer
+	args := append([]string{"-input", "repository-scan=" + repo}, outputs.baseArgs()...)
+	if err := run(args, &stdout); err != nil {
+		t.Fatalf("run failed: %v", err)
+	}
+
+	legalHTML, err := os.ReadFile(outputs.LegalHTML)
+	if err != nil {
+		t.Fatalf("read legal html: %v", err)
+	}
+	if !strings.Contains(string(legalHTML), "Copied license text") {
+		t.Fatalf("expected copied license link in legal html: %s", string(legalHTML))
+	}
+
+	copiedFiles, err := filepath.Glob(filepath.Join(filepath.Dir(outputs.LegalHTML), "license-texts", "node", "app", "file-licensed", "1-0-0", "license-*.txt"))
+	if err != nil {
+		t.Fatalf("glob copied licenses: %v", err)
+	}
+	if len(copiedFiles) != 1 {
+		t.Fatalf("copied files = %#v", copiedFiles)
+	}
+	copiedText, err := os.ReadFile(copiedFiles[0])
+	if err != nil {
+		t.Fatalf("read copied license: %v", err)
+	}
+	if string(copiedText) != "MIT License\n\nPermission is hereby granted" {
+		t.Fatalf("copied text = %q", string(copiedText))
+	}
+}
+
 func TestRunStdoutAnnouncesGeneratedOutputs(t *testing.T) {
 	t.Parallel()
 

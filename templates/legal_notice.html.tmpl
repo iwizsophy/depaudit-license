@@ -46,6 +46,7 @@
             <h3>{{if eq .Kind "embedded-license-text"}}Embedded License Text{{else}}Notice Text{{end}}</h3>
             {{if .LicenseName}}<div class="pkg-meta">License: {{.LicenseName}}</div>{{end}}
             {{if .LicenseFilePath}}<div class="pkg-meta">License file: {{.LicenseFilePath}}</div>{{end}}
+            {{if .CopiedFilePath}}<div class="pkg-meta">Copied license text: <a href="{{.CopiedFilePath}}">{{.CopiedFilePath}}</a></div>{{end}}
             <pre>{{.Text}}</pre>
           </section>
         </div>

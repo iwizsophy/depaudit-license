@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -328,7 +329,11 @@ func (r *nugetResolver) resolveEmbeddedLicenseFromPackageContent(packageContentU
 }
 
 func readEmbeddedLicenseFromDirectory(packageDir string, licensePath string) string {
-	payload, err := os.ReadFile(filepath.Join(packageDir, filepath.FromSlash(strings.TrimSpace(licensePath))))
+	normalized := normalizeEmbeddedLicensePath(licensePath)
+	if strings.TrimSpace(packageDir) == "" || normalized == "" {
+		return ""
+	}
+	payload, err := os.ReadFile(filepath.Join(packageDir, filepath.FromSlash(normalized)))
 	if err != nil {
 		return ""
 	}
@@ -336,9 +341,12 @@ func readEmbeddedLicenseFromDirectory(packageDir string, licensePath string) str
 }
 
 func readEmbeddedLicenseFromZip(reader *zip.Reader, licensePath string) string {
-	normalized := strings.TrimLeft(filepath.ToSlash(strings.TrimSpace(licensePath)), "/")
+	normalized := normalizeEmbeddedLicensePath(licensePath)
+	if normalized == "" {
+		return ""
+	}
 	for _, file := range reader.File {
-		if filepath.ToSlash(file.Name) != normalized {
+		if normalizeEmbeddedLicensePath(file.Name) != normalized {
 			continue
 		}
 		payload, err := readZipFile(file)
@@ -348,6 +356,14 @@ func readEmbeddedLicenseFromZip(reader *zip.Reader, licensePath string) string {
 		return string(payload)
 	}
 	return ""
+}
+
+func normalizeEmbeddedLicensePath(licensePath string) string {
+	normalized := path.Clean(strings.TrimLeft(filepath.ToSlash(strings.TrimSpace(licensePath)), "/"))
+	if normalized == "." || normalized == ".." || strings.HasPrefix(normalized, "../") {
+		return ""
+	}
+	return normalized
 }
 
 func readZipFile(file *zip.File) ([]byte, error) {

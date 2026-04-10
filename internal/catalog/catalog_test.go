@@ -434,6 +434,30 @@ func TestNormalizeHandlesCommonExpressionsWithRealCatalog(t *testing.T) {
 	}
 }
 
+func TestNormalizeTextUsesEmbeddedLicenseEvidence(t *testing.T) {
+	t.Parallel()
+
+	cat, err := Load(filepath.Join("..", "..", "configs", "licenses.json"))
+	if err != nil {
+		t.Fatalf("load real catalog: %v", err)
+	}
+
+	cases := map[string]string{
+		"MIT License\n\nCopyright (c) 2024 Example Authors":                                  "MIT",
+		"Permission is hereby granted, free of charge.\nTHE SOFTWARE IS PROVIDED \"AS IS\".": "MIT",
+		"Apache License\nVersion 2.0, January 2004\nhttp://www.apache.org/licenses/":         "Apache-2.0",
+		"Apache License, Version 2.0":                                                        "Apache-2.0",
+		"internal commercial terms only":                                                     "Unknown",
+	}
+
+	for input, want := range cases {
+		got, _ := cat.NormalizeText(input)
+		if got != want {
+			t.Fatalf("NormalizeText(%q) = %q, want %q", input, got, want)
+		}
+	}
+}
+
 func TestLoadRejectsDuplicateKeys(t *testing.T) {
 	t.Parallel()
 

@@ -155,6 +155,8 @@ Presentation:
 - `-legal-template`, `-legal-theme-css`
 - `-vuln-template`, `-vuln-theme-css`
 
+When package-local embedded license text is discovered, the CLI copies that raw text next to the legal notice output under `license-texts/...` and links it from the legal notice HTML / JSON via `copiedFilePath`.
+
 Report / legal notice custom templates can use these helpers:
 
 - `slug`

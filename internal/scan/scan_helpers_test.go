@@ -94,4 +94,10 @@ func TestNodeMetadataParsingHelpers(t *testing.T) {
 	if got := mustPURL(Package{}); got != "" {
 		t.Fatalf("mustPURL empty = %q", got)
 	}
+	if got := embeddedLicenseFileCandidate("SEE LICENSE IN LICENSE.md"); got != "LICENSE.md" {
+		t.Fatalf("embeddedLicenseFileCandidate SEE LICENSE = %q", got)
+	}
+	if got := embeddedLicenseFileCandidate("MIT"); got != "" {
+		t.Fatalf("embeddedLicenseFileCandidate SPDX = %q", got)
+	}
 }

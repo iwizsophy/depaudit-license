@@ -105,13 +105,11 @@ func applyMetadata(pkg inventory.Package, meta metadata, cat *catalog.Catalog, s
 		pkg.Provenance.FieldOrigins["rawLicense"] = sourceID
 		changed = true
 	}
-	if isMissingLicenseKey(pkg.LicenseKey, cat) && strings.TrimSpace(pkg.RawLicense) != "" {
-		if cat != nil {
-			if key, _ := cat.Normalize(pkg.RawLicense); strings.TrimSpace(key) != "" {
-				pkg.LicenseKey = key
-				pkg.Provenance.FieldOrigins["licenseKey"] = sourceID
-				changed = true
-			}
+	if isMissingLicenseKey(pkg.LicenseKey, cat) {
+		if key := resolveLicenseKeyFromMetadata(pkg, meta, cat); key != "" {
+			pkg.LicenseKey = key
+			pkg.Provenance.FieldOrigins["licenseKey"] = sourceID
+			changed = true
 		}
 	}
 	if strings.TrimSpace(pkg.Repository) == "" && strings.TrimSpace(meta.Repository) != "" {
@@ -155,6 +153,33 @@ func applyMetadata(pkg inventory.Package, meta metadata, cat *catalog.Catalog, s
 		pkg.Provenance.SourceIDs = uniqueNonEmpty(append(pkg.Provenance.SourceIDs, sourceID))
 	}
 	return pkg, changed
+}
+
+func resolveLicenseKeyFromMetadata(pkg inventory.Package, meta metadata, cat *catalog.Catalog) string {
+	if cat == nil {
+		return ""
+	}
+
+	embeddedText := firstNonEmpty(pkg.EmbeddedLicenseText, meta.EmbeddedLicenseText)
+	rawLicense := strings.TrimSpace(pkg.RawLicense)
+	if rawLicense != "" {
+		key, _ := cat.Normalize(rawLicense)
+		if strings.TrimSpace(key) != "" && key != cat.Fallback {
+			return key
+		}
+		if strings.TrimSpace(embeddedText) != "" {
+			if textKey, _ := cat.NormalizeText(embeddedText); strings.TrimSpace(textKey) != "" && textKey != cat.Fallback {
+				return textKey
+			}
+		}
+		return strings.TrimSpace(key)
+	}
+
+	if strings.TrimSpace(embeddedText) == "" {
+		return ""
+	}
+	key, _ := cat.NormalizeText(embeddedText)
+	return strings.TrimSpace(key)
 }
 
 func isMissingLicense(value string) bool {

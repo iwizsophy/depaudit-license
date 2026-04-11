@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"depaudit-license/internal/catalog"
@@ -121,6 +122,42 @@ func TestLoadMergesMultipleSources(t *testing.T) {
 	}
 }
 
+func TestLoadAppliesBeforeMergeTransformPerSource(t *testing.T) {
+	t.Parallel()
+
+	cat, err := catalog.Load(filepath.Join("..", "..", "configs", "licenses.json"))
+	if err != nil {
+		t.Fatalf("load catalog: %v", err)
+	}
+
+	result, err := Load(LoadConfig{
+		Sources: []SourceSpec{
+			{ID: "cyclonedx", Kind: InputKindCycloneDXJSON, Location: filepath.Join("..", "sbom", "testdata", "cyclonedx", "app.json")},
+			{ID: "spdx", Kind: InputKindSPDXJSON, Location: filepath.Join("..", "sbom", "testdata", "spdx", "app.json")},
+		},
+		Catalog: cat,
+		BeforeMerge: func(source SourceSpec, doc inventory.Document) (inventory.Document, error) {
+			doc.Diagnostics = append(doc.Diagnostics, inventory.Diagnostic{
+				SourceID: strings.TrimSpace(source.ID),
+				Code:     "before-merge-applied",
+				Severity: "info",
+				Message:  strings.TrimSpace(source.Kind),
+			})
+			return doc, nil
+		},
+	})
+	if err != nil {
+		t.Fatalf("load with before merge hook: %v", err)
+	}
+
+	if len(result.Document.Diagnostics) != 2 {
+		t.Fatalf("diagnostics = %#v", result.Document.Diagnostics)
+	}
+	if !slices.Equal([]string{result.Document.Diagnostics[0].SourceID, result.Document.Diagnostics[1].SourceID}, []string{"cyclonedx", "spdx"}) {
+		t.Fatalf("diagnostic source ids = %#v", result.Document.Diagnostics)
+	}
+}
+
 func TestLoadMergesRepositoryScanAndSPDXSources(t *testing.T) {
 	t.Parallel()
 
@@ -135,13 +172,22 @@ func TestLoadMergesRepositoryScanAndSPDXSources(t *testing.T) {
 			{ID: "spdx", Kind: InputKindSPDXJSON, Location: filepath.Join("..", "sbom", "testdata", "spdx", "app.json")},
 		},
 		Catalog: cat,
+		BeforeMerge: func(source SourceSpec, doc inventory.Document) (inventory.Document, error) {
+			roots := []string(nil)
+			if source.Kind == InputKindRepositoryScan {
+				roots = []string{repoScanFixtureRoot()}
+			}
+			return enrich.ApplyLocal(enrich.Config{
+				Catalog:         cat,
+				RepositoryRoots: roots,
+			}, doc)
+		},
 	})
 	if err != nil {
 		t.Fatalf("load inputs: %v", err)
 	}
-	result.Document, err = enrich.Apply(enrich.Config{
-		Catalog:         cat,
-		RepositoryRoots: []string{repoScanFixtureRoot()},
+	result.Document, err = enrich.ApplyRemote(enrich.Config{
+		Catalog: cat,
 	}, result.Document)
 	if err != nil {
 		t.Fatalf("enrich inputs: %v", err)

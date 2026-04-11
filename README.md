@@ -139,6 +139,14 @@ Example: run with vulnerability outputs:
   -vuln-mode full
 ```
 
+Example: load runtime defaults from a config file and override only the repository path:
+
+```powershell
+.\depaudit-license-windows-amd64.exe `
+  -config .\configs\depaudit-license.config.json `
+  -input repository-scan=.\my-repository
+```
+
 ## Customization
 
 License definitions and descriptions:
@@ -149,7 +157,6 @@ License definitions and descriptions:
 - `-license-text-bundle` overrides locale-based bundle resolution
 - `-license-override-file` loads a package-level override JSON for manually resolving licenses such as `Unknown`
 - `-exclude-policy` loads versioned shallow/subgraph exclude policy JSON
-- `-exclude-patterns` remains supported and is internally synthesized as a legacy shallow rule
 
 The built-in catalog now also includes review-only definitions for common source-available and proprietary-adjacent licenses. When a package matches one of these definitions, it can resolve out of `Unknown`, but the matched license still carries `requires_manual_review: true` and should not be treated as pre-approved OSS without policy review.
 
@@ -199,6 +206,17 @@ Presentation:
 - `-template`, `-theme-css`
 - `-legal-template`, `-legal-theme-css`
 - `-vuln-template`, `-vuln-theme-css`
+- `-config` / `--config` loads a versioned runtime config JSON for CLI defaults
+
+Runtime config:
+
+- `-config <path>`, `--config <path>`, or `--config=<path>` loads runtime defaults from JSON
+- precedence is `CLI > env > runtime config > built-in default`
+- local paths inside the runtime config are resolved relative to the config file itself
+- `inputs` and `licenseCatalogs` are list settings, so any CLI `-input` or `-license-catalog` replaces the runtime-config list instead of appending to it
+- runtime config schema and sample are available at:
+  - [configs/runtime-config.schema.json](configs/runtime-config.schema.json)
+  - [configs/runtime-config.sample.json](configs/runtime-config.sample.json)
 
 When package-local embedded license text is discovered, the CLI copies that raw text next to the legal notice output under `license-texts/...` and links it from the legal notice HTML / JSON via `copiedFilePath`.
 
@@ -219,6 +237,80 @@ Remote catalog behavior:
 - `-remote-catalog-mode stale-fallback`
 - `-remote-catalog-cache-dir <path>`
 
+External metadata / vulnerability API behavior:
+
+- `-http-cache-mode off|use|refresh|cache-only`
+- `-http-cache-dir <path>`
+- `-http-cache-ttl 24h`
+- `-max-package-artifact-bytes 268435456`
+- `-max-package-metadata-bytes 1048576`
+- `-max-embedded-license-bytes 4194304`
+- `-max-package-archive-entries 10000`
+- `-npm-registry-base-url <url>`
+- `-nuget-registration-base-url <url>`
+- `-osv-base-url <url>`
+- `-github-advisory-base-url <url>`
+- `-github-advisory-token <token>`
+- `-nvd-base-url <url>`
+- `-nvd-api-key <key>`
+
+For secret-like settings, the effective precedence is:
+
+- CLI flag
+- environment variable
+- runtime config
+- built-in default
+
+`-http-cache-*` applies to package metadata enrichment and vulnerability APIs. Remote license catalog URLs continue to use `-remote-catalog-mode` / `-remote-catalog-cache-dir` so stale-fallback behavior remains catalog-specific. Cached HTTP responses are also bounded by the same request-specific metadata and package-content size limits before they are buffered or written to disk.
+
+Artifact-backed license resolution also enforces explicit safety limits for package artifacts, package metadata files, embedded license files, and package archive entry counts. The same limits apply to local package-manager artifacts and remote package-content fallback. When one of these limits is exceeded, the run fails with an error instead of falling back to review-only output.
+
+The external metadata and vulnerability endpoints actually used during the run are recorded in report JSON and vulnerability JSON as `provenance.externalSources`. Remote license catalog URLs continue to appear in `provenance.catalogSources`.
+
+Package-level provenance can also record `provenance.artifactResolution`. Local package-manager artifacts such as `node_modules` or NuGet `global-packages` are preferred and can be recorded even when enrichment does not need to overwrite any package fields. The remote enrichment phase skips packages that already carry local package-manager artifact evidence so redundant external lookups are avoided. When no local package-manager artifact is available and the resolver has to rely on a remote source, the package is marked with `reviewRequired: true`, a warning is emitted to stderr, and report JSON includes a `remote_resolution_fallback_used` diagnostic so the result can be reviewed separately from local-artifact-backed evidence.
+
+Recommended patterns:
+
+- use `-http-cache-mode use -http-cache-ttl 24h` for normal CI or local runs
+- use `-http-cache-mode cache-only -http-cache-ttl 0` when repeatedly adjusting output presentation and you want to avoid new external requests
+- use `-http-cache-mode refresh` when you need to repopulate cache from upstream APIs
+- use `-http-cache-mode off` when cache must be bypassed completely
+
+## External network access
+
+This CLI can access external services when metadata enrichment, remote catalogs, or vulnerability reporting are enabled.
+
+- npm metadata enrichment:
+  default `https://registry.npmjs.org`
+  override `-npm-registry-base-url`
+- NuGet metadata enrichment:
+  default `https://api.nuget.org/v3/registration5-gz-semver2`
+  package archive fallback uses the `packageContent` URL returned by the selected registration service
+  override `-nuget-registration-base-url`
+- Remote license catalogs:
+  any `http://` or `https://` URL passed to `-license-catalog`
+  cache controls: `-remote-catalog-mode`, `-remote-catalog-cache-dir`
+- OSV vulnerability queries:
+  default `https://api.osv.dev`
+  override `-osv-base-url`
+- GitHub Advisory queries:
+  default `https://api.github.com`
+  override `-github-advisory-base-url`
+  auth: `-github-advisory-token` or `DEPAUDIT_LICENSE_GITHUB_ADVISORY_TOKEN`, `GITHUB_TOKEN`, `GH_TOKEN`
+- NVD vulnerability enrichment:
+  default `https://services.nvd.nist.gov`
+  override `-nvd-base-url`
+  auth: `-nvd-api-key` or `DEPAUDIT_LICENSE_NVD_API_KEY`, `NVD_API_KEY`
+
+Rate-limit notes:
+
+- GitHub raises REST API limits when authenticated
+- NVD raises API limits when an API key is provided
+- OSV does not currently require authentication
+- npm registry and NuGet public-read metadata requests are better handled through cache or an internal mirror/proxy than through per-request credentials
+
+When endpoint overrides are used, the selected mirror or proxy becomes part of the tool's evidence path and should be managed as an operational dependency.
+
 ## Exclude policies
 
 `depaudit-license` supports two different exclusion layers.
@@ -229,8 +321,6 @@ Remote catalog behavior:
 Use `shallow exclude` when you want to hide packages from the rendered report / legal notice output but still keep an audit trail in JSON output. Excluded packages are removed from visible package lists, license groups, production inventory, and legal notice evidence, but remain visible in `excludedPackages` with rule metadata.
 
 Use `subgraph exclude` when you want to remove a matched root package and dependencies that are reachable only from that root before merge. Shared dependencies are preserved if another non-excluded root still reaches them. If graph support is unavailable, `onUnsupported` controls whether the policy should `warn`, `error`, or `ignore`.
-
-`-exclude-patterns` remains a legacy shorthand for simple shallow exclusion by package-name fragment. It is internally converted into a synthesized shallow rule, so it cannot express project path, dependency type, runtime-asset, or graph-based behavior.
 
 Minimal example:
 
@@ -309,6 +399,7 @@ Public OSS releases start at `1.0.0`.
 
 - This is an independent OSS tool for license inventory, notice generation, and supplemental vulnerability reporting.
 - It is not affiliated with OSV, GitHub Advisory Database, NVD, SPDX, or the CycloneDX project.
+- It can access external package metadata, license catalog, and vulnerability APIs depending on the selected inputs and flags.
 - It is intended to assist and streamline license inventory, notice generation, and review workflows, not to conclusively resolve licensing issues.
 - It does not provide legal advice, legal opinions, or a guarantee of license compliance.
 - License classification, metadata enrichment, and generated notice outputs can be incomplete, outdated, or incorrect depending on upstream package metadata and available evidence.

@@ -1,16 +1,29 @@
 package enrich
 
 import (
+	"archive/zip"
+	"bytes"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"depaudit-license/internal/catalog"
 	"depaudit-license/internal/inventory"
+	"depaudit-license/internal/scan"
 )
+
+func applyAll(cfg Config, doc inventory.Document) (inventory.Document, error) {
+	result, err := ApplyLocal(cfg, doc)
+	if err != nil {
+		return inventory.Document{}, err
+	}
+	return ApplyRemote(cfg, result)
+}
 
 func TestApplyFillsMissingNodeMetadataWithoutOverwritingSBOMValues(t *testing.T) {
 	t.Parallel()
@@ -63,7 +76,7 @@ func TestApplyFillsMissingNodeMetadataWithoutOverwritingSBOMValues(t *testing.T)
 		}},
 	}
 
-	enriched, err := Apply(Config{
+	enriched, err := applyAll(Config{
 		Catalog:         cat,
 		RepositoryRoots: []string{root},
 	}, doc)
@@ -92,6 +105,9 @@ func TestApplyFillsMissingNodeMetadataWithoutOverwritingSBOMValues(t *testing.T)
 	}
 	if len(enriched.Sources) != 2 {
 		t.Fatalf("sources = %#v", enriched.Sources)
+	}
+	if pkg.Provenance.ArtifactResolution == nil || pkg.Provenance.ArtifactResolution.Kind != "local-package-manager" || pkg.Provenance.ArtifactResolution.Detail != "node-modules" {
+		t.Fatalf("artifact resolution = %#v", pkg.Provenance.ArtifactResolution)
 	}
 }
 
@@ -164,7 +180,7 @@ func TestApplyUsesRegistryAndGlobalPackagesForMissingMetadata(t *testing.T) {
 		},
 	}
 
-	enriched, err := Apply(Config{
+	enriched, err := applyAll(Config{
 		Client:                  server.Client(),
 		Catalog:                 cat,
 		NodeRegistryBaseURL:     server.URL,
@@ -188,6 +204,175 @@ func TestApplyUsesRegistryAndGlobalPackagesForMissingMetadata(t *testing.T) {
 	}
 	if nugetPkg.MetadataSource != "nuget-global-packages" {
 		t.Fatalf("nuget metadata source = %q", nugetPkg.MetadataSource)
+	}
+	if nugetPkg.Provenance.ArtifactResolution == nil || nugetPkg.Provenance.ArtifactResolution.Kind != "local-package-manager" || nugetPkg.Provenance.ArtifactResolution.Detail != "nuget-global-packages" {
+		t.Fatalf("nuget artifact resolution = %#v", nugetPkg.Provenance.ArtifactResolution)
+	}
+}
+
+func TestApplyMarksRemoteNuGetArtifactFallbackForReview(t *testing.T) {
+	t.Parallel()
+
+	cat, err := catalog.Load(filepath.Join("..", "..", "configs", "licenses.json"))
+	if err != nil {
+		t.Fatalf("load catalog: %v", err)
+	}
+
+	var archive bytes.Buffer
+	writer := zip.NewWriter(&archive)
+	nuspec, err := writer.Create("Sample.Package.nuspec")
+	if err != nil {
+		t.Fatalf("create nuspec: %v", err)
+	}
+	if _, err := nuspec.Write([]byte(`<?xml version="1.0" encoding="utf-8"?>
+<package>
+  <metadata>
+    <id>Sample.Package</id>
+    <version>1.2.3</version>
+    <authors>Sample Author</authors>
+    <license type="file">LICENSE.txt</license>
+  </metadata>
+</package>`)); err != nil {
+		t.Fatalf("write nuspec: %v", err)
+	}
+	licenseFile, err := writer.Create("LICENSE.txt")
+	if err != nil {
+		t.Fatalf("create license: %v", err)
+	}
+	if _, err := licenseFile.Write([]byte("MIT License\n\nCopyright (c) 2024 Example")); err != nil {
+		t.Fatalf("write license: %v", err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("close archive: %v", err)
+	}
+
+	var server *httptest.Server
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/sample.package/1.2.3.json":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"catalogEntry":"` + server.URL + `/catalog/sample.package.1.2.3.json","packageContent":"` + server.URL + `/package/sample.package.1.2.3.nupkg"}`))
+		case "/catalog/sample.package.1.2.3.json":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"authors":"Sample Author","projectUrl":"https://example.test/sample","published":"2024-02-03T00:00:00Z"}`))
+		case "/package/sample.package.1.2.3.nupkg":
+			w.Header().Set("Content-Type", "application/octet-stream")
+			_, _ = w.Write(archive.Bytes())
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	doc := inventory.Document{
+		Sources: []inventory.Source{{
+			ID:       "sbom",
+			Kind:     "spdx-json",
+			Location: "/tmp/app.spdx.json",
+		}},
+		Packages: []inventory.Package{{
+			Provenance: inventory.PackageProvenance{
+				SourceIDs: []string{"sbom"},
+			},
+			Ecosystem:  "dotnet",
+			Name:       "Sample.Package",
+			Version:    "1.2.3",
+			LicenseKey: cat.Fallback,
+		}},
+	}
+
+	enriched, err := applyAll(Config{
+		Client:                   server.Client(),
+		Catalog:                  cat,
+		NuGetGlobalPackagesRoot:  filepath.Join(t.TempDir(), "missing"),
+		NuGetRegistrationBaseURL: server.URL,
+	}, doc)
+	if err != nil {
+		t.Fatalf("apply enrichment: %v", err)
+	}
+
+	pkg := enriched.Packages[0]
+	if pkg.Provenance.ArtifactResolution == nil {
+		t.Fatal("expected artifact resolution")
+	}
+	if pkg.Provenance.ArtifactResolution.Kind != "remote-package-content" || !pkg.Provenance.ArtifactResolution.ReviewRequired {
+		t.Fatalf("artifact resolution = %#v", pkg.Provenance.ArtifactResolution)
+	}
+	if len(enriched.Diagnostics) != 1 || enriched.Diagnostics[0].Code != "remote_resolution_fallback_used" || enriched.Diagnostics[0].Severity != "warning" {
+		t.Fatalf("diagnostics = %#v", enriched.Diagnostics)
+	}
+	if !strings.Contains(enriched.Diagnostics[0].Message, "manual review required") {
+		t.Fatalf("diagnostic message = %#v", enriched.Diagnostics[0])
+	}
+}
+
+func TestApplyMarksRemoteMetadataFallbackForReviewWithoutMetadataOverwrite(t *testing.T) {
+	t.Parallel()
+
+	cat, err := catalog.Load(filepath.Join("..", "..", "configs", "licenses.json"))
+	if err != nil {
+		t.Fatalf("load catalog: %v", err)
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/react/18.2.0" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+  "license": "MIT",
+  "homepage": "https://react.dev",
+  "repository": { "url": "https://github.com/facebook/react" },
+  "author": { "name": "Meta" }
+}`))
+	}))
+	defer server.Close()
+
+	doc := inventory.Document{
+		Sources: []inventory.Source{{
+			ID:       "sbom",
+			Kind:     "cyclonedx-json",
+			Location: "/tmp/app.cdx.json",
+		}},
+		Packages: []inventory.Package{{
+			Provenance: inventory.PackageProvenance{
+				SourceIDs: []string{"sbom"},
+			},
+			Ecosystem:       "node",
+			Name:            "react",
+			Version:         "18.2.0",
+			RawLicense:      "MIT",
+			LicenseKey:      "MIT",
+			Repository:      "https://github.com/facebook/react",
+			Homepage:        "https://react.dev",
+			CopyrightHolder: "Meta",
+			CopyrightYear:   2026,
+			MetadataSource:  "cyclonedx-json",
+		}},
+	}
+
+	enriched, err := applyAll(Config{
+		Client:              server.Client(),
+		Catalog:             cat,
+		NodeRegistryBaseURL: server.URL,
+	}, doc)
+	if err != nil {
+		t.Fatalf("apply enrichment: %v", err)
+	}
+
+	if len(enriched.Sources) != 1 {
+		t.Fatalf("sources = %#v", enriched.Sources)
+	}
+	pkg := enriched.Packages[0]
+	if pkg.MetadataSource != "cyclonedx-json" || !slices.Equal(pkg.Provenance.SourceIDs, []string{"sbom"}) {
+		t.Fatalf("package should keep source provenance = %#v", pkg)
+	}
+	if pkg.Provenance.ArtifactResolution == nil || pkg.Provenance.ArtifactResolution.Kind != "remote-metadata" || !pkg.Provenance.ArtifactResolution.ReviewRequired {
+		t.Fatalf("artifact resolution = %#v", pkg.Provenance.ArtifactResolution)
+	}
+	if len(enriched.Diagnostics) != 1 || enriched.Diagnostics[0].Code != "remote_resolution_fallback_used" {
+		t.Fatalf("diagnostics = %#v", enriched.Diagnostics)
 	}
 }
 
@@ -232,7 +417,7 @@ func TestApplyKeepsExistingEnrichmentSourceAndSortsSources(t *testing.T) {
 		}},
 	}
 
-	enriched, err := Apply(Config{
+	enriched, err := applyAll(Config{
 		Catalog:         cat,
 		RepositoryRoots: []string{root},
 	}, doc)
@@ -298,7 +483,7 @@ func TestApplyClonesDocumentBeforeMutatingEnrichedPackages(t *testing.T) {
 	originalPackage := doc.Packages[0]
 	originalConflicts := append([]inventory.ConflictValue(nil), doc.Conflicts[0].Values...)
 
-	enriched, err := Apply(Config{
+	enriched, err := applyAll(Config{
 		Catalog:         cat,
 		RepositoryRoots: []string{root},
 	}, doc)
@@ -379,7 +564,7 @@ func TestApplyRegistersSharedEnrichmentSourceOnce(t *testing.T) {
 		},
 	}
 
-	enriched, err := Apply(Config{
+	enriched, err := applyAll(Config{
 		Catalog:         cat,
 		RepositoryRoots: []string{root},
 	}, doc)
@@ -419,7 +604,7 @@ func TestApplyWithoutMetadataChangePreservesDocument(t *testing.T) {
 		}},
 	}
 
-	enriched, err := Apply(Config{}, doc)
+	enriched, err := applyAll(Config{}, doc)
 	if err != nil {
 		t.Fatalf("apply enrichment: %v", err)
 	}
@@ -497,5 +682,108 @@ func TestCloneDocumentClonesDiagnostics(t *testing.T) {
 
 	if got := cloneDiagnostics(nil); got != nil {
 		t.Fatalf("cloneDiagnostics nil = %#v", got)
+	}
+}
+
+func TestApplyLocalReturnsErrorForOversizedEmbeddedLicenseFile(t *testing.T) {
+	t.Parallel()
+
+	cat, err := catalog.Load(filepath.Join("..", "..", "configs", "licenses.json"))
+	if err != nil {
+		t.Fatalf("load catalog: %v", err)
+	}
+
+	root := t.TempDir()
+	packageDir := filepath.Join(root, "web", "node_modules", "file-licensed")
+	if err := os.MkdirAll(packageDir, 0o755); err != nil {
+		t.Fatalf("mkdir package dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(packageDir, "package.json"), []byte(`{
+  "name": "file-licensed",
+  "version": "1.0.0",
+  "license": "LICENSE.txt"
+}`), 0o644); err != nil {
+		t.Fatalf("write package.json: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(packageDir, "LICENSE.txt"), []byte("0123456789ABCDEF"), 0o644); err != nil {
+		t.Fatalf("write license file: %v", err)
+	}
+
+	_, err = ApplyLocal(Config{
+		Catalog:         cat,
+		RepositoryRoots: []string{root},
+		ArtifactReadLimits: scan.ArtifactReadLimits{
+			MaxPackageArtifactBytes:  scan.DefaultMaxPackageArtifactBytes,
+			MaxPackageMetadataBytes:  scan.DefaultMaxPackageMetadataBytes,
+			MaxEmbeddedLicenseBytes:  8,
+			MaxPackageArchiveEntries: scan.DefaultMaxPackageArchiveEntries,
+		},
+	}, inventory.Document{
+		Packages: []inventory.Package{{
+			Ecosystem: "node",
+			Project:   "web",
+			Name:      "file-licensed",
+			Version:   "1.0.0",
+		}},
+	})
+	if err == nil {
+		t.Fatal("expected oversized embedded license to fail")
+	}
+	var safetyErr *scan.ArtifactSafetyError
+	if !errors.As(err, &safetyErr) {
+		t.Fatalf("expected ArtifactSafetyError, got %T: %v", err, err)
+	}
+}
+
+func TestApplyRemoteReturnsErrorForOversizedNuGetPackageArtifact(t *testing.T) {
+	t.Parallel()
+
+	cat, err := catalog.Load(filepath.Join("..", "..", "configs", "licenses.json"))
+	if err != nil {
+		t.Fatalf("load catalog: %v", err)
+	}
+
+	var server *httptest.Server
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/sample.package/1.2.3.json":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"catalogEntry":"` + server.URL + `/catalog/sample.package.1.2.3.json","packageContent":"` + server.URL + `/package/sample.package.1.2.3.nupkg"}`))
+		case "/catalog/sample.package.1.2.3.json":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"authors":"Sample Author","published":"2024-02-03T00:00:00Z"}`))
+		case "/package/sample.package.1.2.3.nupkg":
+			w.Header().Set("Content-Type", "application/octet-stream")
+			w.Header().Set("Content-Length", "999")
+			_, _ = w.Write([]byte("short"))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	_, err = ApplyRemote(Config{
+		Client:                   server.Client(),
+		Catalog:                  cat,
+		NuGetRegistrationBaseURL: server.URL,
+		ArtifactReadLimits: scan.ArtifactReadLimits{
+			MaxPackageArtifactBytes:  64,
+			MaxPackageMetadataBytes:  scan.DefaultMaxPackageMetadataBytes,
+			MaxEmbeddedLicenseBytes:  scan.DefaultMaxEmbeddedLicenseBytes,
+			MaxPackageArchiveEntries: scan.DefaultMaxPackageArchiveEntries,
+		},
+	}, inventory.Document{
+		Packages: []inventory.Package{{
+			Ecosystem: "dotnet",
+			Name:      "Sample.Package",
+			Version:   "1.2.3",
+		}},
+	})
+	if err == nil {
+		t.Fatal("expected oversized remote package artifact to fail")
+	}
+	var safetyErr *scan.ArtifactSafetyError
+	if !errors.As(err, &safetyErr) {
+		t.Fatalf("expected ArtifactSafetyError, got %T: %v", err, err)
 	}
 }

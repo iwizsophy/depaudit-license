@@ -1,0 +1,31 @@
+{
+  "version": "v1alpha1",
+  "inputs": [
+    "repository-scan=../my-repository",
+    "cyclonedx-json=../sbom/app.cyclonedx.json"
+  ],
+  "outputHtml": "../dist/depaudit-license.html",
+  "outputJson": "../dist/depaudit-license.json",
+  "outputLegalHtml": "../dist/depaudit-license-legal-notice.html",
+  "outputVulnJson": "../dist/depaudit-license-vulnerability.json",
+  "vulnMode": "osv+github",
+  "licenseCatalogs": [
+    "licenses.json",
+    "https://example.test/depaudit-license/catalog-overrides.json"
+  ],
+  "locale": "ja",
+  "licenseOverrideFile": "license-overrides.sample.json",
+  "excludePolicy": "exclude-policy.sample.json",
+  "remoteCatalogMode": "stale-fallback",
+  "remoteCatalogCacheDir": "../.cache/depaudit-license/catalogs",
+  "httpCacheMode": "use",
+  "httpCacheDir": "../.cache/depaudit-license/http",
+  "httpCacheTtl": "24h",
+  "githubAdvisoryToken": "set-via-env-preferred",
+  "nvdApiKey": "set-via-env-preferred",
+  "maxPackageArtifactBytes": 268435456,
+  "maxPackageMetadataBytes": 1048576,
+  "maxEmbeddedLicenseBytes": 4194304,
+  "maxPackageArchiveEntries": 10000,
+  "timeoutSeconds": 15
+}

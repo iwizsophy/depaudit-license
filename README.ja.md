@@ -139,6 +139,14 @@ macOS:
   -vuln-mode full
 ```
 
+例: 実行設定を config file に寄せ、repository path だけ CLI で上書きする:
+
+```powershell
+.\depaudit-license-windows-amd64.exe `
+  -config .\configs\depaudit-license.config.json `
+  -input repository-scan=.\my-repository
+```
+
 ## カスタマイズ
 
 ライセンス定義と説明文:
@@ -149,7 +157,6 @@ macOS:
 - `-license-text-bundle` を指定すると locale ベース解決よりそのパスを優先します
 - `-license-override-file` は `Unknown` など未解決の license を package 単位で手動解決する override JSON を読み込みます
 - `-exclude-policy` は versioned な shallow/subgraph exclude policy JSON を読み込みます
-- `-exclude-patterns` は引き続き利用でき、内部的には legacy shallow rule として扱われます
 
 既定 catalog には、common な source-available / proprietary-adjacent license を review-only key として識別する定義も含まれます。これらに一致した package は `Unknown` からは抜けますが、`requires_manual_review: true` のままであり、事前承認済み OSS と同じ扱いにはしません。
 
@@ -199,6 +206,17 @@ package 単位の license override:
 - `-template`, `-theme-css`
 - `-legal-template`, `-legal-theme-css`
 - `-vuln-template`, `-vuln-theme-css`
+- `-config` / `--config` は CLI 実行設定 JSON を読み込みます
+
+runtime config:
+
+- `-config <path>`、`--config <path>`、`--config=<path>` で versioned な実行設定 JSON を読み込みます
+- 優先順位は `CLI > env > runtime config > built-in default` です
+- runtime config 内のローカル path は config file 自身の配置ディレクトリ基準で解決されます
+- `inputs` と `licenseCatalogs` は list 設定なので、CLI で `-input` または `-license-catalog` を 1 件でも指定した場合は runtime config 側の list を置き換えます
+- schema / sample:
+  - [configs/runtime-config.schema.json](configs/runtime-config.schema.json)
+  - [configs/runtime-config.sample.json](configs/runtime-config.sample.json)
 
 package 内の同梱ライセンス本文を検出した場合、CLI は legal notice 出力の隣に `license-texts/...` として原文をコピーし、legal notice HTML / JSON から `copiedFilePath` で参照できるようにします。
 
@@ -219,6 +237,80 @@ remote catalog の挙動:
 - `-remote-catalog-mode stale-fallback`
 - `-remote-catalog-cache-dir <path>`
 
+外部 metadata / vulnerability API の挙動:
+
+- `-http-cache-mode off|use|refresh|cache-only`
+- `-http-cache-dir <path>`
+- `-http-cache-ttl 24h`
+- `-max-package-artifact-bytes 268435456`
+- `-max-package-metadata-bytes 1048576`
+- `-max-embedded-license-bytes 4194304`
+- `-max-package-archive-entries 10000`
+- `-npm-registry-base-url <url>`
+- `-nuget-registration-base-url <url>`
+- `-osv-base-url <url>`
+- `-github-advisory-base-url <url>`
+- `-github-advisory-token <token>`
+- `-nvd-base-url <url>`
+- `-nvd-api-key <key>`
+
+secret 系設定の優先順位は次のとおりです。
+
+- CLI flag
+- environment variable
+- runtime config
+- built-in default
+
+`-http-cache-*` は package metadata enrichment と vulnerability API に適用されます。remote license catalog URL については、引き続き `-remote-catalog-mode` / `-remote-catalog-cache-dir` を使い、stale-fallback は catalog 専用挙動として扱います。HTTP cache に保存されるレスポンスも、メモリへの取り込みやディスク書き込みの前に、リクエストごとの metadata / package-content size limit に従って上限チェックされます。
+
+artifact に基づく license 解決には、package artifact 本体、package metadata file、embedded license file、package archive entry count の安全上限も適用されます。これらの上限は local package-manager artifact と remote package-content fallback の両方に適用されます。上限を超えた場合は review 用出力へフォールバックせず、その run を error で停止します。
+
+run 中に実際に使用された external metadata / vulnerability endpoint は、report JSON と vulnerability JSON の `provenance.externalSources` にも記録されます。remote license catalog URL は引き続き `provenance.catalogSources` に出力されます。
+
+package 単位では `provenance.artifactResolution` も記録されます。`node_modules` や NuGet `global-packages` のような local package-manager artifact を優先し、field を上書きしない no-op enrichment でも local 根拠を保持できます。remote enrichment フェーズでは、すでに local package-manager artifact 根拠を持つ package への外部 lookup を省略します。local package-manager artifact を確認できず remote を根拠にした場合は `reviewRequired: true` を付け、stderr warning と report JSON の `remote_resolution_fallback_used` diagnostic で明示します。つまり、local artifact に基づく結果と分けて review できるようにします。
+
+推奨パターン:
+
+- 通常の CI / local run では `-http-cache-mode use -http-cache-ttl 24h`
+- 表示調整などで繰り返し実行し、新しい外部リクエストを避けたい場合は `-http-cache-mode cache-only -http-cache-ttl 0`
+- upstream API から強制的に再取得して cache を更新したい場合は `-http-cache-mode refresh`
+- cache を完全に使わない場合は `-http-cache-mode off`
+
+## 外部ネットワークアクセス
+
+metadata enrichment、remote catalog、vulnerability reporting を使う場合、この CLI は外部 service へアクセスすることがあります。
+
+- npm metadata enrichment:
+  既定 `https://registry.npmjs.org`
+  上書き `-npm-registry-base-url`
+- NuGet metadata enrichment:
+  既定 `https://api.nuget.org/v3/registration5-gz-semver2`
+  package archive fallback は、選択された registration service が返す `packageContent` URL を使います
+  上書き `-nuget-registration-base-url`
+- remote license catalog:
+  `-license-catalog` に渡した任意の `http://` / `https://` URL
+  cache 制御は `-remote-catalog-mode`, `-remote-catalog-cache-dir`
+- OSV vulnerability query:
+  既定 `https://api.osv.dev`
+  上書き `-osv-base-url`
+- GitHub Advisory query:
+  既定 `https://api.github.com`
+  上書き `-github-advisory-base-url`
+  認証: `-github-advisory-token` または `DEPAUDIT_LICENSE_GITHUB_ADVISORY_TOKEN`, `GITHUB_TOKEN`, `GH_TOKEN`
+- NVD vulnerability enrichment:
+  既定 `https://services.nvd.nist.gov`
+  上書き `-nvd-base-url`
+  認証: `-nvd-api-key` または `DEPAUDIT_LICENSE_NVD_API_KEY`, `NVD_API_KEY`
+
+rate limit に関する補足:
+
+- GitHub は認証付きで REST API の上限が緩和されます
+- NVD は API key ありで利用上限が引き上がります
+- OSV は現時点で認証を要求しません
+- npm registry と NuGet の public-read metadata は、個別 credential より cache や社内 mirror / proxy で吸収する前提が現実的です
+
+endpoint override を使う場合、選択した mirror / proxy 自体が evidence path の一部になるため、運用上の依存先として管理してください。
+
 ## 除外ポリシー
 
 `depaudit-license` には、役割の異なる 2 層の除外があります。
@@ -229,8 +321,6 @@ remote catalog の挙動:
 `shallow exclude` は、rendered な report / legal notice から package を外したいが、JSON 上の監査痕跡は残したい場合に使います。除外 package は visible package list、license group、production inventory、legal notice evidence からは外れますが、JSON 出力では `excludedPackages` に rule metadata 付きで残ります。
 
 `subgraph exclude` は、matched root package と、その root からしか到達できない依存枝を merge 前に落としたい場合に使います。別の非除外 root から到達可能な shared dependency は残ります。graph が利用できない場合は `onUnsupported` で `warn` / `error` / `ignore` を選べます。
-
-`-exclude-patterns` は、package 名断片ベースの簡易 shallow exclude として引き続き使えます。ただし内部的には合成 shallow rule に変換されるため、project path、dependency type、runtime asset、graph ベース条件は表現できません。
 
 最小例:
 
@@ -305,6 +395,7 @@ remote catalog の挙動:
 
 - このツールは、ライセンス inventory、notice 生成、補助的な vulnerability reporting のための独立した OSS です
 - OSV、GitHub Advisory Database、NVD、SPDX、CycloneDX project とは提携していません
+- 入力と flag に応じて、外部の package metadata、license catalog、vulnerability API にアクセスすることがあります
 - ライセンス inventory、notice 生成、review workflow の容易化を目的とした支援ツールであり、ライセンス上の問題を最終的に解決または確定するものではありません
 - 法的助言、法的見解、またはライセンス適合性の保証を提供するものではありません
 - license classification、metadata enrichment、生成される notice 出力は、upstream package metadata や取得できる evidence に依存しており、不完全、古い、または誤っている可能性があります

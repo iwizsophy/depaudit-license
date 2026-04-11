@@ -24,15 +24,16 @@ type SourceRef struct {
 }
 
 type PackageRef struct {
-	Key            string            `json:"key"`
-	PURL           string            `json:"purl,omitempty"`
-	Ecosystem      string            `json:"ecosystem,omitempty"`
-	Name           string            `json:"name"`
-	Version        string            `json:"version,omitempty"`
-	Aliases        []string          `json:"aliases,omitempty"`
-	SourceIDs      []string          `json:"sourceIds,omitempty"`
-	FieldOrigins   map[string]string `json:"fieldOrigins,omitempty"`
-	ConflictFields []string          `json:"conflictFields,omitempty"`
+	Key                string                        `json:"key"`
+	PURL               string                        `json:"purl,omitempty"`
+	Ecosystem          string                        `json:"ecosystem,omitempty"`
+	Name               string                        `json:"name"`
+	Version            string                        `json:"version,omitempty"`
+	Aliases            []string                      `json:"aliases,omitempty"`
+	SourceIDs          []string                      `json:"sourceIds,omitempty"`
+	FieldOrigins       map[string]string             `json:"fieldOrigins,omitempty"`
+	ConflictFields     []string                      `json:"conflictFields,omitempty"`
+	ArtifactResolution *inventory.ArtifactResolution `json:"artifactResolution,omitempty"`
 }
 
 func BuildAssessmentInput(doc inventory.Document) (AssessmentInput, error) {
@@ -76,15 +77,16 @@ func buildPackageRef(pkg inventory.Package) (PackageRef, error) {
 	packageURL, _ := purl.FromPackage(pkg)
 	key := purl.CanonicalKey(pkg)
 	ref := PackageRef{
-		Key:            key,
-		PURL:           packageURL,
-		Ecosystem:      strings.TrimSpace(pkg.Ecosystem),
-		Name:           name,
-		Version:        strings.TrimSpace(pkg.Version),
-		Aliases:        aliasesForPackage(pkg, packageURL),
-		SourceIDs:      cloneStrings(pkg.Provenance.SourceIDs),
-		FieldOrigins:   cloneMap(pkg.Provenance.FieldOrigins),
-		ConflictFields: cloneStrings(pkg.Provenance.ConflictFields),
+		Key:                key,
+		PURL:               packageURL,
+		Ecosystem:          strings.TrimSpace(pkg.Ecosystem),
+		Name:               name,
+		Version:            strings.TrimSpace(pkg.Version),
+		Aliases:            aliasesForPackage(pkg, packageURL),
+		SourceIDs:          cloneStrings(pkg.Provenance.SourceIDs),
+		FieldOrigins:       cloneMap(pkg.Provenance.FieldOrigins),
+		ConflictFields:     cloneStrings(pkg.Provenance.ConflictFields),
+		ArtifactResolution: cloneArtifactResolution(pkg.Provenance.ArtifactResolution),
 	}
 	return ref, nil
 }
@@ -121,6 +123,14 @@ func cloneMap(values map[string]string) map[string]string {
 		result[key] = strings.TrimSpace(value)
 	}
 	return result
+}
+
+func cloneArtifactResolution(value *inventory.ArtifactResolution) *inventory.ArtifactResolution {
+	if value == nil {
+		return nil
+	}
+	cloned := *value
+	return &cloned
 }
 
 func uniqueSorted(values []string) []string {

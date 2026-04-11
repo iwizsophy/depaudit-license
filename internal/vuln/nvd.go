@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+
+	"depaudit-license/internal/externalaccess"
 )
 
 const DefaultNVDBaseURL = "https://services.nvd.nist.gov"
@@ -129,6 +131,12 @@ func (c NVDClient) fetchCVE(ctx context.Context, client *http.Client, baseURL st
 	if err != nil {
 		return AdvisoryRef{}, err
 	}
+	req = externalaccess.WithRequestService(req, externalaccess.Service{
+		ID:             "nvd",
+		Purpose:        "vulnerability",
+		BaseURL:        baseURL,
+		AuthConfigured: strings.TrimSpace(c.APIKey) != "",
+	})
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", "depaudit-license")
 	if apiKey := strings.TrimSpace(c.APIKey); apiKey != "" {

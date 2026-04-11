@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -14,6 +13,10 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"depaudit-license/internal/externalaccess"
+	"depaudit-license/internal/httpcache"
+	"depaudit-license/internal/inventory"
 )
 
 type nugetResolver struct {
@@ -21,6 +24,7 @@ type nugetResolver struct {
 	cache               map[string]metadata
 	globalPackagesRoot  string
 	registrationBaseURL string
+	artifactReadLimits  ArtifactReadLimits
 }
 
 type nugetCatalogEntry struct {
@@ -50,6 +54,8 @@ type nugetNuspec struct {
 	} `xml:"metadata"`
 }
 
+const DefaultNuGetRegistrationBaseURL = "https://api.nuget.org/v3/registration5-gz-semver2"
+
 func (r *nugetResolver) resolve(packageName string, version string) metadata {
 	cacheKey := makeNugetPackageKey(strings.ToLower(packageName), strings.ToLower(strings.TrimSpace(version)))
 	if cached, ok := r.cache[cacheKey]; ok {
@@ -63,12 +69,12 @@ func (r *nugetResolver) resolve(packageName string, version string) metadata {
 		Source:     "fallback",
 	}
 
-	if localMeta, ok := r.resolveFromGlobalPackages(packageName, version); ok {
+	if localMeta, ok, err := r.resolveFromGlobalPackages(packageName, version); err == nil && ok {
 		r.cache[cacheKey] = localMeta
 		return localMeta
 	}
 
-	if remoteMeta, ok := r.resolveFromRegistration(packageName, version); ok {
+	if remoteMeta, ok, err := r.resolveFromRegistration(packageName, version); err == nil && ok {
 		r.cache[cacheKey] = remoteMeta
 		return remoteMeta
 	}
@@ -77,16 +83,20 @@ func (r *nugetResolver) resolve(packageName string, version string) metadata {
 	return meta
 }
 
-func (r *nugetResolver) resolveFromGlobalPackages(packageName string, version string) (metadata, bool) {
+func (r *nugetResolver) resolveFromGlobalPackages(packageName string, version string) (metadata, bool, error) {
 	root, ok := r.resolveGlobalPackagesRoot()
 	if !ok {
-		return metadata{}, false
+		return metadata{}, false, nil
 	}
+	limits := NormalizeArtifactReadLimits(r.artifactReadLimits)
 
 	packageDir := filepath.Join(root, strings.ToLower(packageName), strings.ToLower(strings.TrimSpace(version)))
 	entries, err := os.ReadDir(packageDir)
 	if err != nil {
-		return metadata{}, false
+		if os.IsNotExist(err) {
+			return metadata{}, false, nil
+		}
+		return metadata{}, false, nil
 	}
 
 	var nuspecPath string
@@ -100,26 +110,36 @@ func (r *nugetResolver) resolveFromGlobalPackages(packageName string, version st
 		}
 	}
 	if nuspecPath == "" {
-		return metadata{}, false
+		return metadata{}, false, nil
 	}
 
-	payload, err := os.ReadFile(nuspecPath)
+	payload, err := readFileLimited(nuspecPath, limits.MaxPackageMetadataBytes)
 	if err != nil {
-		return metadata{}, false
+		if safetyErr := wrapArtifactSafetyError(packageName, version, nuspecPath, "NuGet metadata file", err); safetyErr != nil {
+			return metadata{}, false, safetyErr
+		}
+		return metadata{}, false, nil
 	}
 
 	var nuspec nugetNuspec
 	if err := xml.Unmarshal(payload, &nuspec); err != nil {
-		return metadata{}, false
+		return metadata{}, false, nil
 	}
 
-	licenseValue, licensePath, licenseText := resolveNuspecLicense(
+	licenseValue, licensePath, licenseText, err := resolveNuspecLicense(
 		nuspec.Metadata.License.Type,
 		nuspec.Metadata.License.Value,
 		nuspec.Metadata.LicenseURL,
 		packageDir,
 		nil,
+		limits,
 	)
+	if err != nil {
+		if safetyErr := wrapArtifactSafetyError(packageName, version, packageDir, "NuGet embedded license file", err); safetyErr != nil {
+			return metadata{}, false, safetyErr
+		}
+		return metadata{}, false, nil
+	}
 
 	meta := metadata{
 		RawLicense:          firstNonEmpty(licenseValue, "Unknown"),
@@ -130,14 +150,19 @@ func (r *nugetResolver) resolveFromGlobalPackages(packageName string, version st
 		Source:              "nuget-global-packages",
 		EmbeddedLicensePath: licensePath,
 		EmbeddedLicenseText: licenseText,
+		ArtifactResolution: &inventory.ArtifactResolution{
+			Kind:   "local-package-manager",
+			Detail: "nuget-global-packages",
+		},
 	}
-	return meta, true
+	return meta, true, nil
 }
 
-func (r *nugetResolver) resolveFromRegistration(packageName string, version string) (metadata, bool) {
+func (r *nugetResolver) resolveFromRegistration(packageName string, version string) (metadata, bool, error) {
 	if strings.TrimSpace(version) == "" || r.client == nil {
-		return metadata{}, false
+		return metadata{}, false, nil
 	}
+	limits := NormalizeArtifactReadLimits(r.artifactReadLimits)
 
 	endpoint := fmt.Sprintf(
 		"%s/%s/%s.json",
@@ -146,9 +171,17 @@ func (r *nugetResolver) resolveFromRegistration(packageName string, version stri
 		urlPathEscapeLower(version),
 	)
 
-	body, err := requestJSON(r.client, endpoint)
+	service := externalaccess.Service{
+		ID:      "nuget-registration",
+		Purpose: MetadataEnrichmentSourceKind,
+		BaseURL: r.resolveRegistrationBaseURL(),
+	}
+	body, err := requestJSON(r.client, endpoint, service, limits.MaxPackageMetadataBytes)
 	if err != nil {
-		return metadata{}, false
+		if safetyErr := wrapArtifactSafetyError(packageName, version, endpoint, "NuGet registration metadata", err); safetyErr != nil {
+			return metadata{}, false, safetyErr
+		}
+		return metadata{}, false, nil
 	}
 
 	var leaf struct {
@@ -156,27 +189,48 @@ func (r *nugetResolver) resolveFromRegistration(packageName string, version stri
 		PackageContent string `json:"packageContent"`
 	}
 	if err := json.Unmarshal(body, &leaf); err != nil || strings.TrimSpace(leaf.CatalogEntry) == "" {
-		return metadata{}, false
+		return metadata{}, false, nil
 	}
 
-	catalogBody, err := requestJSON(r.client, leaf.CatalogEntry)
+	catalogBody, err := requestJSON(r.client, leaf.CatalogEntry, service, limits.MaxPackageMetadataBytes)
 	if err != nil {
-		return metadata{}, false
+		if safetyErr := wrapArtifactSafetyError(packageName, version, leaf.CatalogEntry, "NuGet catalog metadata", err); safetyErr != nil {
+			return metadata{}, false, safetyErr
+		}
+		return metadata{}, false, nil
 	}
 
 	var entry nugetCatalogEntry
 	if err := json.Unmarshal(catalogBody, &entry); err != nil {
-		return metadata{}, false
+		return metadata{}, false, nil
 	}
 
 	licenseValue := firstNonEmpty(entry.LicenseExpression, entry.LicenseURL)
 	licensePath := ""
 	licenseText := ""
+	artifactResolution := &inventory.ArtifactResolution{
+		Kind:           "remote-metadata",
+		Detail:         "nuget-registration",
+		ReviewRequired: true,
+		ReviewReason:   "local-package-manager-artifact-not-available",
+	}
 	if strings.TrimSpace(entry.LicenseExpression) == "" && strings.TrimSpace(leaf.PackageContent) != "" {
 		var err error
-		licensePath, licenseText, err = r.resolveEmbeddedLicenseFromPackageContent(leaf.PackageContent)
+		licensePath, licenseText, err = r.resolveEmbeddedLicenseFromPackageContent(packageName, version, leaf.PackageContent)
+		if err != nil {
+			if safetyErr := wrapArtifactSafetyError(packageName, version, leaf.PackageContent, "NuGet package artifact", err); safetyErr != nil {
+				return metadata{}, false, safetyErr
+			}
+			err = nil
+		}
 		if err == nil && licenseText != "" {
 			licenseValue = licensePath
+			artifactResolution = &inventory.ArtifactResolution{
+				Kind:           "remote-package-content",
+				Detail:         "nuget-package-content",
+				ReviewRequired: true,
+				ReviewReason:   "local-package-manager-artifact-not-available",
+			}
 		}
 	}
 
@@ -189,11 +243,12 @@ func (r *nugetResolver) resolveFromRegistration(packageName string, version stri
 		Source:              "nuget-registration",
 		EmbeddedLicensePath: licensePath,
 		EmbeddedLicenseText: licenseText,
+		ArtifactResolution:  artifactResolution,
 	}
 	if strings.TrimSpace(meta.Repository) == "" {
 		meta.Repository = meta.Homepage
 	}
-	return meta, true
+	return meta, true, nil
 }
 
 func nugetGlobalPackagesRoot() (string, bool) {
@@ -224,24 +279,25 @@ func (r *nugetResolver) resolveRegistrationBaseURL() string {
 	if strings.TrimSpace(r.registrationBaseURL) != "" {
 		return r.registrationBaseURL
 	}
-	return "https://api.nuget.org/v3/registration5-gz-semver2"
+	return DefaultNuGetRegistrationBaseURL
 }
 
-func resolveNuspecLicense(kind string, value string, licenseURL string, packageDir string, zipFile *zip.Reader) (string, string, string) {
+func resolveNuspecLicense(kind string, value string, licenseURL string, packageDir string, zipFile *zip.Reader, limits ArtifactReadLimits) (string, string, string, error) {
 	switch strings.ToLower(strings.TrimSpace(kind)) {
 	case "expression":
-		return strings.TrimSpace(value), "", ""
+		return strings.TrimSpace(value), "", "", nil
 	case "file":
 		licensePath := strings.TrimSpace(value)
 		licenseText := ""
+		var err error
 		if zipFile != nil {
-			licenseText = readEmbeddedLicenseFromZip(zipFile, licensePath)
+			licenseText, err = readEmbeddedLicenseFromZip(zipFile, licensePath, NormalizeArtifactReadLimits(limits).MaxEmbeddedLicenseBytes)
 		} else if packageDir != "" {
-			licenseText = readEmbeddedLicenseFromDirectory(packageDir, licensePath)
+			licenseText, err = readEmbeddedLicenseFromDirectory(packageDir, licensePath, NormalizeArtifactReadLimits(limits).MaxEmbeddedLicenseBytes)
 		}
-		return firstNonEmpty(licensePath, licenseURL), licensePath, licenseText
+		return firstNonEmpty(licensePath, licenseURL), licensePath, licenseText, err
 	default:
-		return firstNonEmpty(strings.TrimSpace(value), strings.TrimSpace(licenseURL)), "", ""
+		return firstNonEmpty(strings.TrimSpace(value), strings.TrimSpace(licenseURL)), "", "", nil
 	}
 }
 
@@ -269,11 +325,17 @@ func urlPathEscapeLower(value string) string {
 	return url.PathEscape(strings.ToLower(strings.TrimSpace(value)))
 }
 
-func (r *nugetResolver) resolveEmbeddedLicenseFromPackageContent(packageContentURL string) (string, string, error) {
+func (r *nugetResolver) resolveEmbeddedLicenseFromPackageContent(packageName string, version string, packageContentURL string) (string, string, error) {
 	req, err := http.NewRequest(http.MethodGet, packageContentURL, nil)
 	if err != nil {
 		return "", "", err
 	}
+	req = externalaccess.WithRequestService(req, externalaccess.Service{
+		ID:      "nuget-registration",
+		Purpose: MetadataEnrichmentSourceKind,
+		BaseURL: externalaccess.OriginFromURL(packageContentURL),
+	})
+	req = httpcache.WithMaxResponseBytes(req, NormalizeArtifactReadLimits(r.artifactReadLimits).MaxPackageArtifactBytes)
 	req.Header.Set("User-Agent", "depaudit-license")
 
 	resp, err := r.client.Do(req)
@@ -285,8 +347,12 @@ func (r *nugetResolver) resolveEmbeddedLicenseFromPackageContent(packageContentU
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return "", "", fmt.Errorf("unexpected status %d", resp.StatusCode)
 	}
+	limits := NormalizeArtifactReadLimits(r.artifactReadLimits)
+	if resp.ContentLength > 0 && resp.ContentLength > limits.MaxPackageArtifactBytes {
+		return "", "", &artifactLimitExceededError{reason: fmt.Sprintf("content length %d bytes exceeds limit %d bytes", resp.ContentLength, limits.MaxPackageArtifactBytes)}
+	}
 
-	payload, err := io.ReadAll(resp.Body)
+	payload, err := readAllLimited(resp.Body, limits.MaxPackageArtifactBytes)
 	if err != nil {
 		return "", "", err
 	}
@@ -295,11 +361,14 @@ func (r *nugetResolver) resolveEmbeddedLicenseFromPackageContent(packageContentU
 	if err != nil {
 		return "", "", err
 	}
+	if len(zipReader.File) > limits.MaxPackageArchiveEntries {
+		return "", "", &artifactLimitExceededError{reason: fmt.Sprintf("archive entry count %d exceeds limit %d", len(zipReader.File), limits.MaxPackageArchiveEntries)}
+	}
 
 	var nuspecPayload []byte
 	for _, file := range zipReader.File {
 		if strings.EqualFold(filepath.Ext(file.Name), ".nuspec") {
-			nuspecPayload, err = readZipFile(file)
+			nuspecPayload, err = readZipFile(file, limits.MaxPackageMetadataBytes)
 			if err != nil {
 				return "", "", err
 			}
@@ -315,47 +384,54 @@ func (r *nugetResolver) resolveEmbeddedLicenseFromPackageContent(packageContentU
 		return "", "", err
 	}
 
-	_, licensePath, licenseText := resolveNuspecLicense(
+	_, licensePath, licenseText, err := resolveNuspecLicense(
 		nuspec.Metadata.License.Type,
 		nuspec.Metadata.License.Value,
 		nuspec.Metadata.LicenseURL,
 		"",
 		zipReader,
+		limits,
 	)
+	if err != nil {
+		return "", "", err
+	}
 	if licensePath == "" || licenseText == "" {
 		return "", "", fmt.Errorf("embedded license file not found in package archive")
 	}
 	return licensePath, licenseText, nil
 }
 
-func readEmbeddedLicenseFromDirectory(packageDir string, licensePath string) string {
+func readEmbeddedLicenseFromDirectory(packageDir string, licensePath string, maxBytes int64) (string, error) {
 	normalized := normalizeEmbeddedLicensePath(licensePath)
 	if strings.TrimSpace(packageDir) == "" || normalized == "" {
-		return ""
+		return "", nil
 	}
-	payload, err := os.ReadFile(filepath.Join(packageDir, filepath.FromSlash(normalized)))
+	payload, err := readFileLimited(filepath.Join(packageDir, filepath.FromSlash(normalized)), maxBytes)
 	if err != nil {
-		return ""
+		if os.IsNotExist(err) {
+			return "", nil
+		}
+		return "", err
 	}
-	return string(payload)
+	return string(payload), nil
 }
 
-func readEmbeddedLicenseFromZip(reader *zip.Reader, licensePath string) string {
+func readEmbeddedLicenseFromZip(reader *zip.Reader, licensePath string, maxBytes int64) (string, error) {
 	normalized := normalizeEmbeddedLicensePath(licensePath)
 	if normalized == "" {
-		return ""
+		return "", nil
 	}
 	for _, file := range reader.File {
 		if normalizeEmbeddedLicensePath(file.Name) != normalized {
 			continue
 		}
-		payload, err := readZipFile(file)
+		payload, err := readZipFile(file, maxBytes)
 		if err != nil {
-			return ""
+			return "", err
 		}
-		return string(payload)
+		return string(payload), nil
 	}
-	return ""
+	return "", nil
 }
 
 func normalizeEmbeddedLicensePath(licensePath string) string {
@@ -383,11 +459,14 @@ func hasWindowsVolumePrefix(value string) bool {
 	return (drive >= 'A' && drive <= 'Z') || (drive >= 'a' && drive <= 'z')
 }
 
-func readZipFile(file *zip.File) ([]byte, error) {
+func readZipFile(file *zip.File, maxBytes int64) ([]byte, error) {
 	handle, err := file.Open()
 	if err != nil {
 		return nil, err
 	}
 	defer handle.Close()
-	return io.ReadAll(handle)
+	if maxBytes > 0 && file.UncompressedSize64 > uint64(maxBytes) {
+		return nil, fmt.Errorf("zip entry size %d bytes exceeds limit %d bytes", file.UncompressedSize64, maxBytes)
+	}
+	return readAllLimited(handle, maxBytes)
 }

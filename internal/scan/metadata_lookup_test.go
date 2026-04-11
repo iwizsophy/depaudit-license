@@ -1,6 +1,7 @@
 package scan
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -13,6 +14,16 @@ import (
 	"depaudit-license/internal/catalog"
 	"depaudit-license/internal/inventory"
 )
+
+func mustNewMetadataLookupService(t *testing.T, cfg MetadataLookupConfig) *MetadataLookupService {
+	t.Helper()
+
+	service, err := NewMetadataLookupService(cfg)
+	if err != nil {
+		t.Fatalf("new metadata lookup service: %v", err)
+	}
+	return service
+}
 
 func TestMetadataLookupServiceEnrichPackageUsesInstalledNodeMetadata(t *testing.T) {
 	t.Parallel()
@@ -38,11 +49,12 @@ func TestMetadataLookupServiceEnrichPackageUsesInstalledNodeMetadata(t *testing.
 		t.Fatalf("load catalog: %v", err)
 	}
 
-	service := NewMetadataLookupService(MetadataLookupConfig{
+	service := mustNewMetadataLookupService(t, MetadataLookupConfig{
 		Catalog:         cat,
 		RepositoryRoots: []string{filepath.Join(root, "web"), filepath.Join(root, "web")},
+		Mode:            MetadataLookupModeFull,
 	})
-	pkg, source, changed := service.EnrichPackage(inventory.Package{
+	pkg, source, changed, err := service.EnrichPackage(inventory.Package{
 		Ecosystem:  "node",
 		Project:    "web",
 		Name:       "react",
@@ -51,6 +63,9 @@ func TestMetadataLookupServiceEnrichPackageUsesInstalledNodeMetadata(t *testing.
 		LicenseKey: cat.Fallback,
 		Provenance: inventory.PackageProvenance{SourceIDs: []string{"repo-scan"}},
 	})
+	if err != nil {
+		t.Fatalf("enrich package: %v", err)
+	}
 	if !changed {
 		t.Fatal("expected package to be enriched")
 	}
@@ -77,8 +92,9 @@ func TestMetadataLookupServiceEnrichPackageUsesInstalledNodeMetadata(t *testing.
 func TestMetadataLookupServiceNodeProjectDirsDeduplicatesRoots(t *testing.T) {
 	t.Parallel()
 
-	service := NewMetadataLookupService(MetadataLookupConfig{
+	service := mustNewMetadataLookupService(t, MetadataLookupConfig{
 		RepositoryRoots: []string{"/repo", "/repo", "/repo-alt"},
+		Mode:            MetadataLookupModeFull,
 	})
 	dirs := service.nodeProjectDirs(inventory.Package{Project: "web"})
 	expected := []string{filepath.Clean("/repo"), filepath.Clean("/repo-alt"), filepath.Join("/repo", "web"), filepath.Join("/repo-alt", "web")}
@@ -107,7 +123,7 @@ func TestApplyMetadataDoesNotOverwriteExistingFields(t *testing.T) {
 		t.Fatalf("load catalog: %v", err)
 	}
 
-	pkg, changed := applyMetadata(inventory.Package{
+	pkg, changed, sourceChanged := applyMetadata(inventory.Package{
 		RawLicense:     "Apache-2.0",
 		LicenseKey:     "Apache-2.0",
 		Repository:     "https://example.test/repo",
@@ -127,6 +143,9 @@ func TestApplyMetadataDoesNotOverwriteExistingFields(t *testing.T) {
 	if changed {
 		t.Fatal("expected no changes")
 	}
+	if sourceChanged {
+		t.Fatal("expected no source changes")
+	}
 	if pkg.Repository != "https://example.test/repo" {
 		t.Fatalf("repository = %q", pkg.Repository)
 	}
@@ -143,25 +162,31 @@ func TestMetadataLookupServiceFallbacks(t *testing.T) {
 		t.Fatalf("load catalog: %v", err)
 	}
 
-	service := NewMetadataLookupService(MetadataLookupConfig{
+	service := mustNewMetadataLookupService(t, MetadataLookupConfig{
 		Catalog:         cat,
 		RepositoryRoots: []string{"", " /repo ", "/repo"},
+		Mode:            MetadataLookupModeFull,
 	})
-	if _, _, changed := service.EnrichPackage(inventory.Package{
+	if _, _, changed, err := service.EnrichPackage(inventory.Package{
 		Ecosystem: "generic",
 		Name:      "custom",
 		Version:   "1.0.0",
-	}); changed {
+	}); err != nil {
+		t.Fatalf("enrich package: %v", err)
+	} else if changed {
 		t.Fatal("expected unsupported ecosystem to skip enrichment")
 	}
 
-	pkg, source, changed := service.EnrichPackage(inventory.Package{
+	pkg, source, changed, err := service.EnrichPackage(inventory.Package{
 		Ecosystem:  "node",
 		Project:    "web",
 		Name:       "missing-package",
 		Version:    "1.0.0",
 		LicenseKey: cat.Fallback,
 	})
+	if err != nil {
+		t.Fatalf("enrich package: %v", err)
+	}
 	if changed || source != nil || pkg.Name != "missing-package" {
 		t.Fatalf("unexpected fallback enrichment result: %#v %#v %v", pkg, source, changed)
 	}
@@ -206,9 +231,10 @@ func TestMetadataLookupServiceEnrichPackageReturnsNoSourceWhenNoChangesApply(t *
 		t.Fatalf("load catalog: %v", err)
 	}
 
-	service := NewMetadataLookupService(MetadataLookupConfig{
+	service := mustNewMetadataLookupService(t, MetadataLookupConfig{
 		Catalog:         cat,
 		RepositoryRoots: []string{filepath.Join(root, "web")},
+		Mode:            MetadataLookupModeFull,
 	})
 	original := inventory.Package{
 		Ecosystem:       "node",
@@ -230,9 +256,12 @@ func TestMetadataLookupServiceEnrichPackageReturnsNoSourceWhenNoChangesApply(t *
 		},
 	}
 
-	pkg, source, changed := service.EnrichPackage(original)
-	if changed || source != nil {
-		t.Fatalf("expected no-op enrichment, got %#v %#v %v", pkg, source, changed)
+	pkg, source, changed, err := service.EnrichPackage(original)
+	if err != nil {
+		t.Fatalf("enrich package: %v", err)
+	}
+	if !changed || source != nil {
+		t.Fatalf("expected local artifact-only enrichment, got %#v %#v %v", pkg, source, changed)
 	}
 	if pkg.RawLicense != original.RawLicense ||
 		pkg.LicenseKey != original.LicenseKey ||
@@ -242,6 +271,9 @@ func TestMetadataLookupServiceEnrichPackageReturnsNoSourceWhenNoChangesApply(t *
 		pkg.MetadataSource != original.MetadataSource ||
 		!slices.Equal(pkg.Provenance.SourceIDs, original.Provenance.SourceIDs) {
 		t.Fatalf("package should remain unchanged: %#v", pkg)
+	}
+	if pkg.Provenance.ArtifactResolution == nil || pkg.Provenance.ArtifactResolution.Kind != "local-package-manager" || pkg.Provenance.ArtifactResolution.Detail != "node-modules" || pkg.Provenance.ArtifactResolution.ReviewRequired {
+		t.Fatalf("artifact resolution = %#v", pkg.Provenance.ArtifactResolution)
 	}
 }
 
@@ -269,26 +301,36 @@ func TestMetadataLookupServiceLookupBranches(t *testing.T) {
 		t.Fatalf("load catalog: %v", err)
 	}
 
-	service := NewMetadataLookupService(MetadataLookupConfig{
+	service := mustNewMetadataLookupService(t, MetadataLookupConfig{
 		Client:              server.Client(),
 		Catalog:             cat,
 		NodeRegistryBaseURL: server.URL,
+		Mode:                MetadataLookupModeFull,
 	})
 
-	meta, ok := service.lookupMetadata(inventory.Package{
+	meta, ok, err := service.lookupMetadata(inventory.Package{
 		Ecosystem: "node",
 		Name:      "react",
 		Version:   "19.2.4",
 	})
+	if err != nil {
+		t.Fatalf("lookup metadata: %v", err)
+	}
 	if !ok || meta.Source != "npm-registry-version" {
 		t.Fatalf("node lookup = %#v %v", meta, ok)
 	}
+	if meta.ArtifactResolution == nil || meta.ArtifactResolution.Kind != "remote-metadata" || !meta.ArtifactResolution.ReviewRequired {
+		t.Fatalf("node artifact resolution = %#v", meta.ArtifactResolution)
+	}
 
-	meta, ok = service.lookupMetadata(inventory.Package{
+	meta, ok, err = service.lookupMetadata(inventory.Package{
 		Ecosystem: "node",
 		Name:      "react",
 		Version:   "^19.0.0",
 	})
+	if err != nil {
+		t.Fatalf("lookup metadata: %v", err)
+	}
 	if ok || meta.Source != "fallback" {
 		t.Fatalf("node fallback lookup = %#v %v", meta, ok)
 	}
@@ -302,17 +344,24 @@ func TestMetadataLookupServiceLookupBranches(t *testing.T) {
 <package><metadata><authors>James Newton-King</authors><license type="expression">MIT</license></metadata></package>`), 0o644); err != nil {
 		t.Fatalf("write nuspec: %v", err)
 	}
-	service = NewMetadataLookupService(MetadataLookupConfig{
+	service = mustNewMetadataLookupService(t, MetadataLookupConfig{
 		Catalog:                 cat,
 		NuGetGlobalPackagesRoot: root,
+		Mode:                    MetadataLookupModeFull,
 	})
-	meta, ok = service.lookupMetadata(inventory.Package{
+	meta, ok, err = service.lookupMetadata(inventory.Package{
 		Ecosystem: "dotnet",
 		Name:      "Newtonsoft.Json",
 		Version:   "13.0.3",
 	})
+	if err != nil {
+		t.Fatalf("lookup metadata: %v", err)
+	}
 	if !ok || meta.Source != "nuget-global-packages" {
 		t.Fatalf("dotnet lookup = %#v %v", meta, ok)
+	}
+	if meta.ArtifactResolution == nil || meta.ArtifactResolution.Kind != "local-package-manager" || meta.ArtifactResolution.Detail != "nuget-global-packages" {
+		t.Fatalf("dotnet artifact resolution = %#v", meta.ArtifactResolution)
 	}
 }
 
@@ -341,11 +390,12 @@ func TestMetadataLookupServiceEnrichPackageUsesDotNetMetadata(t *testing.T) {
 		t.Fatalf("load catalog: %v", err)
 	}
 
-	service := NewMetadataLookupService(MetadataLookupConfig{
+	service := mustNewMetadataLookupService(t, MetadataLookupConfig{
 		Catalog:                 cat,
 		NuGetGlobalPackagesRoot: root,
+		Mode:                    MetadataLookupModeFull,
 	})
-	pkg, source, changed := service.EnrichPackage(inventory.Package{
+	pkg, source, changed, err := service.EnrichPackage(inventory.Package{
 		Ecosystem:  "dotnet",
 		Name:       "Newtonsoft.Json",
 		Version:    "13.0.3",
@@ -355,6 +405,9 @@ func TestMetadataLookupServiceEnrichPackageUsesDotNetMetadata(t *testing.T) {
 			SourceIDs: []string{"repo-scan"},
 		},
 	})
+	if err != nil {
+		t.Fatalf("enrich package: %v", err)
+	}
 	if !changed || source == nil || source.Kind != MetadataEnrichmentSourceKind {
 		t.Fatalf("dotnet enrich result = %#v %#v %v", pkg, source, changed)
 	}
@@ -369,6 +422,39 @@ func TestMetadataLookupServiceEnrichPackageUsesDotNetMetadata(t *testing.T) {
 	}
 	if !slices.Equal(pkg.Provenance.SourceIDs, []string{"enrich:nuget-global-packages", "repo-scan"}) {
 		t.Fatalf("source ids = %#v", pkg.Provenance.SourceIDs)
+	}
+}
+
+func TestMetadataLookupServiceRemoteModeSkipsPackagesWithLocalArtifactResolution(t *testing.T) {
+	t.Parallel()
+
+	service := mustNewMetadataLookupService(t, MetadataLookupConfig{
+		Client: &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			t.Fatalf("unexpected remote request to %s", req.URL.String())
+			return nil, nil
+		})},
+		Mode: MetadataLookupModeRemote,
+	})
+
+	pkg, source, changed, err := service.EnrichPackage(inventory.Package{
+		Ecosystem: "node",
+		Name:      "react",
+		Version:   "19.2.4",
+		Provenance: inventory.PackageProvenance{
+			ArtifactResolution: &inventory.ArtifactResolution{
+				Kind:   "local-package-manager",
+				Detail: "node-modules",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("enrich package: %v", err)
+	}
+	if changed || source != nil {
+		t.Fatalf("expected remote phase to skip package, got changed=%v source=%#v pkg=%#v", changed, source, pkg)
+	}
+	if pkg.Provenance.ArtifactResolution == nil || pkg.Provenance.ArtifactResolution.Kind != "local-package-manager" {
+		t.Fatalf("artifact resolution = %#v", pkg.Provenance.ArtifactResolution)
 	}
 }
 
@@ -397,17 +483,21 @@ func TestMetadataLookupServiceEnrichPackageResolvesNodeLicenseFileText(t *testin
 		t.Fatalf("load catalog: %v", err)
 	}
 
-	service := NewMetadataLookupService(MetadataLookupConfig{
+	service := mustNewMetadataLookupService(t, MetadataLookupConfig{
 		Catalog:         cat,
 		RepositoryRoots: []string{root},
+		Mode:            MetadataLookupModeFull,
 	})
-	pkg, _, changed := service.EnrichPackage(inventory.Package{
+	pkg, _, changed, err := service.EnrichPackage(inventory.Package{
 		Ecosystem:  "node",
 		Project:    "web",
 		Name:       "file-licensed",
 		Version:    "1.0.0",
 		LicenseKey: cat.Fallback,
 	})
+	if err != nil {
+		t.Fatalf("enrich package: %v", err)
+	}
 	if !changed {
 		t.Fatal("expected package to be enriched")
 	}
@@ -445,16 +535,20 @@ func TestMetadataLookupServiceEnrichPackageResolvesNuGetLicenseFileText(t *testi
 		t.Fatalf("load catalog: %v", err)
 	}
 
-	service := NewMetadataLookupService(MetadataLookupConfig{
+	service := mustNewMetadataLookupService(t, MetadataLookupConfig{
 		Catalog:                 cat,
 		NuGetGlobalPackagesRoot: root,
+		Mode:                    MetadataLookupModeFull,
 	})
-	pkg, _, changed := service.EnrichPackage(inventory.Package{
+	pkg, _, changed, err := service.EnrichPackage(inventory.Package{
 		Ecosystem:  "dotnet",
 		Name:       "File.Licensed",
 		Version:    "1.0.0",
 		LicenseKey: cat.Fallback,
 	})
+	if err != nil {
+		t.Fatalf("enrich package: %v", err)
+	}
 	if !changed {
 		t.Fatal("expected package to be enriched")
 	}
@@ -474,7 +568,7 @@ func TestApplyMetadataHelperBranches(t *testing.T) {
 		t.Fatalf("load catalog: %v", err)
 	}
 
-	pkg, changed := applyMetadata(inventory.Package{
+	pkg, changed, sourceChanged := applyMetadata(inventory.Package{
 		RawLicense: "MIT",
 		LicenseKey: "MIT",
 		Provenance: inventory.PackageProvenance{
@@ -487,8 +581,11 @@ func TestApplyMetadataHelperBranches(t *testing.T) {
 	if changed {
 		t.Fatalf("expected empty metadata to be ignored: %#v", pkg)
 	}
+	if sourceChanged {
+		t.Fatalf("expected empty metadata to avoid source changes: %#v", pkg)
+	}
 
-	pkg, changed = applyMetadata(inventory.Package{
+	pkg, changed, sourceChanged = applyMetadata(inventory.Package{
 		RawLicense: "Unknown",
 		LicenseKey: cat.Fallback,
 		Provenance: inventory.PackageProvenance{
@@ -501,8 +598,11 @@ func TestApplyMetadataHelperBranches(t *testing.T) {
 	if !changed || pkg.LicenseKey != "Unknown" || pkg.MetadataSource != "node-modules" {
 		t.Fatalf("expected unknown license metadata to seed fallback values: %#v %v", pkg, changed)
 	}
+	if !sourceChanged {
+		t.Fatalf("expected source changes for fallback license metadata: %#v", pkg)
+	}
 
-	pkg, changed = applyMetadata(inventory.Package{
+	pkg, changed, sourceChanged = applyMetadata(inventory.Package{
 		RawLicense:     "MIT",
 		LicenseKey:     "MIT",
 		MetadataSource: "node-modules",
@@ -517,8 +617,11 @@ func TestApplyMetadataHelperBranches(t *testing.T) {
 	if !changed || pkg.MetadataSource != "node-modules" || pkg.Homepage != "https://react.dev" {
 		t.Fatalf("same-source metadata apply = %#v %v", pkg, changed)
 	}
+	if !sourceChanged {
+		t.Fatalf("expected source changes for homepage metadata: %#v", pkg)
+	}
 
-	pkg, changed = applyMetadata(inventory.Package{
+	pkg, changed, sourceChanged = applyMetadata(inventory.Package{
 		RawLicense:     "MIT",
 		LicenseKey:     "MIT",
 		MetadataSource: "spdx-json",
@@ -533,8 +636,11 @@ func TestApplyMetadataHelperBranches(t *testing.T) {
 	if !changed || pkg.MetadataSource != "merged" {
 		t.Fatalf("merged metadata source = %#v %v", pkg, changed)
 	}
+	if !sourceChanged {
+		t.Fatalf("expected source changes for merged metadata: %#v", pkg)
+	}
 
-	pkg, changed = applyMetadata(inventory.Package{
+	pkg, changed, sourceChanged = applyMetadata(inventory.Package{
 		RawLicense:     "MIT",
 		LicenseKey:     "MIT",
 		Provenance:     inventory.PackageProvenance{},
@@ -555,6 +661,9 @@ func TestApplyMetadataHelperBranches(t *testing.T) {
 	}, cat, "enrich:node-modules")
 	if !changed {
 		t.Fatal("expected metadata fields to be applied")
+	}
+	if !sourceChanged {
+		t.Fatal("expected source changes when metadata fields are applied")
 	}
 	if pkg.CopyrightHolder != "Meta" || pkg.CopyrightYear != 2024 {
 		t.Fatalf("copyright metadata = %#v", pkg)
@@ -587,8 +696,9 @@ func TestUniqueNonEmptyTrimsSortsAndDedupes(t *testing.T) {
 func TestMetadataLookupServiceNodeProjectDirsOmitsBlankProjectPaths(t *testing.T) {
 	t.Parallel()
 
-	service := NewMetadataLookupService(MetadataLookupConfig{
+	service := mustNewMetadataLookupService(t, MetadataLookupConfig{
 		RepositoryRoots: []string{"/repo-b", "/repo-a", "/repo-a"},
+		Mode:            MetadataLookupModeFull,
 	})
 	dirs := service.nodeProjectDirs(inventory.Package{})
 	if !slices.Equal(dirs, []string{"/repo-a", "/repo-b"}) {
@@ -599,13 +709,100 @@ func TestMetadataLookupServiceNodeProjectDirsOmitsBlankProjectPaths(t *testing.T
 func TestMetadataLookupServiceDotNetFallbackLookupReturnsNotFound(t *testing.T) {
 	t.Parallel()
 
-	service := NewMetadataLookupService(MetadataLookupConfig{})
-	meta, ok := service.lookupMetadata(inventory.Package{
+	service := mustNewMetadataLookupService(t, MetadataLookupConfig{Mode: MetadataLookupModeFull})
+	meta, ok, err := service.lookupMetadata(inventory.Package{
 		Ecosystem: "dotnet",
 		Name:      "Missing.Package",
 		Version:   "1.0.0",
 	})
+	if err != nil {
+		t.Fatalf("lookup metadata: %v", err)
+	}
 	if ok || meta.Source != "fallback" {
 		t.Fatalf("dotnet fallback lookup = %#v %v", meta, ok)
+	}
+}
+
+func TestNewMetadataLookupServiceRequiresExplicitMode(t *testing.T) {
+	t.Parallel()
+
+	if _, err := NewMetadataLookupService(MetadataLookupConfig{}); err == nil {
+		t.Fatal("expected mode validation error")
+	}
+	if _, err := NewMetadataLookupService(MetadataLookupConfig{Mode: "invalid"}); err == nil {
+		t.Fatal("expected invalid mode error")
+	}
+}
+
+func TestResolveLicenseKeyFromMetadataBranches(t *testing.T) {
+	t.Parallel()
+
+	cat, err := catalog.Load(filepath.Join("..", "..", "configs", "licenses.json"))
+	if err != nil {
+		t.Fatalf("load catalog: %v", err)
+	}
+
+	if got := resolveLicenseKeyFromMetadata(inventory.Package{}, metadata{}, nil); got != "" {
+		t.Fatalf("nil catalog result = %q", got)
+	}
+
+	got := resolveLicenseKeyFromMetadata(
+		inventory.Package{RawLicense: "Unknown"},
+		metadata{EmbeddedLicenseText: "MIT License\n\nCopyright (c) 2024 Example"},
+		cat,
+	)
+	if got != "MIT" {
+		t.Fatalf("embedded text fallback = %q", got)
+	}
+
+	got = resolveLicenseKeyFromMetadata(
+		inventory.Package{RawLicense: "Custom-Unknown"},
+		metadata{},
+		cat,
+	)
+	if got != cat.Fallback {
+		t.Fatalf("raw fallback = %q", got)
+	}
+
+	got = resolveLicenseKeyFromMetadata(
+		inventory.Package{},
+		metadata{EmbeddedLicenseText: "Apache License\nVersion 2.0, January 2004"},
+		cat,
+	)
+	if got != "Apache-2.0" {
+		t.Fatalf("embedded text only = %q", got)
+	}
+}
+
+func TestMetadataLookupServicePropagatesRemoteMetadataSafetyError(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Length", "128")
+		_, _ = w.Write([]byte(`{"license":"MIT"}`))
+	}))
+	defer server.Close()
+
+	service := mustNewMetadataLookupService(t, MetadataLookupConfig{
+		Client:              server.Client(),
+		NodeRegistryBaseURL: server.URL,
+		ArtifactReadLimits: ArtifactReadLimits{
+			MaxPackageArtifactBytes:  DefaultMaxPackageArtifactBytes,
+			MaxPackageMetadataBytes:  8,
+			MaxEmbeddedLicenseBytes:  DefaultMaxEmbeddedLicenseBytes,
+			MaxPackageArchiveEntries: DefaultMaxPackageArchiveEntries,
+		},
+		Mode: MetadataLookupModeRemote,
+	})
+
+	_, _, err := service.lookupMetadata(inventory.Package{
+		Ecosystem: "node",
+		Name:      "react",
+		Version:   "19.2.4",
+	})
+	var safetyErr *ArtifactSafetyError
+	if !errors.As(err, &safetyErr) {
+		t.Fatalf("expected ArtifactSafetyError, got %T: %v", err, err)
 	}
 }

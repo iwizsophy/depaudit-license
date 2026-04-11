@@ -65,7 +65,15 @@ type Package struct {
 }
 
 type PackageProvenance struct {
-	SourceIDs      []string          `json:"sourceIds,omitempty"`
-	FieldOrigins   map[string]string `json:"fieldOrigins,omitempty"`
-	ConflictFields []string          `json:"conflictFields,omitempty"`
+	SourceIDs          []string            `json:"sourceIds,omitempty"`
+	FieldOrigins       map[string]string   `json:"fieldOrigins,omitempty"`
+	ConflictFields     []string            `json:"conflictFields,omitempty"`
+	ArtifactResolution *ArtifactResolution `json:"artifactResolution,omitempty"`
+}
+
+type ArtifactResolution struct {
+	Kind           string `json:"kind"`
+	Detail         string `json:"detail,omitempty"`
+	ReviewRequired bool   `json:"reviewRequired,omitempty"`
+	ReviewReason   string `json:"reviewReason,omitempty"`
 }

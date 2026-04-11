@@ -18,6 +18,7 @@ type Config struct {
 	NodeRegistryBaseURL      string
 	NuGetGlobalPackagesRoot  string
 	NuGetRegistrationBaseURL string
+	ArtifactReadLimits       scan.ArtifactReadLimits
 }
 
 func ApplyLocal(cfg Config, doc inventory.Document) (inventory.Document, error) {
@@ -36,6 +37,7 @@ func applyWithMode(cfg Config, doc inventory.Document, mode string) (inventory.D
 		NodeRegistryBaseURL:      cfg.NodeRegistryBaseURL,
 		NuGetGlobalPackagesRoot:  cfg.NuGetGlobalPackagesRoot,
 		NuGetRegistrationBaseURL: cfg.NuGetRegistrationBaseURL,
+		ArtifactReadLimits:       cfg.ArtifactReadLimits,
 		Mode:                     mode,
 	})
 	if err != nil {
@@ -45,7 +47,10 @@ func applyWithMode(cfg Config, doc inventory.Document, mode string) (inventory.D
 	result := cloneDocument(doc)
 
 	for index, pkg := range result.Packages {
-		enriched, source, changed := service.EnrichPackage(pkg)
+		enriched, source, changed, err := service.EnrichPackage(pkg)
+		if err != nil {
+			return inventory.Document{}, err
+		}
 		if !changed {
 			continue
 		}

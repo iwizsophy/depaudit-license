@@ -165,6 +165,35 @@ func TestLicenseOverridesSchemaRejectsMissingLicenseKey(t *testing.T) {
 	}
 }
 
+func TestRuntimeConfigSampleMatchesSchema(t *testing.T) {
+	t.Parallel()
+
+	schema := mustCompileSchema(t, "runtime-config.schema.json")
+	doc := mustReadJSON(t, "runtime-config.sample.json")
+
+	if err := schema.Validate(doc); err != nil {
+		t.Fatalf("validate runtime-config.sample.json: %v", err)
+	}
+}
+
+func TestRuntimeConfigSchemaRejectsInvalidVersion(t *testing.T) {
+	t.Parallel()
+
+	schema := mustCompileSchema(t, "runtime-config.schema.json")
+	doc := mustReadJSON(t, "runtime-config.sample.json")
+
+	root, ok := doc.(map[string]any)
+	if !ok {
+		t.Fatalf("unexpected root type %T", doc)
+	}
+
+	root["version"] = "v2"
+
+	if err := schema.Validate(doc); err == nil {
+		t.Fatalf("expected schema validation to fail")
+	}
+}
+
 func mustCompileSchema(t *testing.T, name string) *jsonschema.Schema {
 	t.Helper()
 

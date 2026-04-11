@@ -26,6 +26,7 @@ type MetadataLookupConfig struct {
 	NodeRegistryBaseURL      string
 	NuGetGlobalPackagesRoot  string
 	NuGetRegistrationBaseURL string
+	ArtifactReadLimits       ArtifactReadLimits
 	Mode                     string
 }
 
@@ -50,24 +51,29 @@ func NewMetadataLookupService(cfg MetadataLookupConfig) (*MetadataLookupService,
 		catalog:         cfg.Catalog,
 		repositoryRoots: normalizeRoots(cfg.RepositoryRoots),
 		node: &nodeResolver{
-			client:          cfg.Client,
-			cache:           map[string]metadata{},
-			registryBaseURL: cfg.NodeRegistryBaseURL,
+			client:             cfg.Client,
+			cache:              map[string]metadata{},
+			registryBaseURL:    cfg.NodeRegistryBaseURL,
+			artifactReadLimits: cfg.ArtifactReadLimits,
 		},
 		nuget: &nugetResolver{
 			client:              cfg.Client,
 			cache:               map[string]metadata{},
 			globalPackagesRoot:  cfg.NuGetGlobalPackagesRoot,
 			registrationBaseURL: cfg.NuGetRegistrationBaseURL,
+			artifactReadLimits:  cfg.ArtifactReadLimits,
 		},
 		mode: mode,
 	}, nil
 }
 
-func (s *MetadataLookupService) EnrichPackage(pkg inventory.Package) (inventory.Package, *inventory.Source, bool) {
-	meta, ok := s.lookupMetadata(pkg)
+func (s *MetadataLookupService) EnrichPackage(pkg inventory.Package) (inventory.Package, *inventory.Source, bool, error) {
+	meta, ok, err := s.lookupMetadata(pkg)
+	if err != nil {
+		return pkg, nil, false, err
+	}
 	if !ok {
-		return pkg, nil, false
+		return pkg, nil, false, nil
 	}
 
 	source := inventory.Source{
@@ -77,50 +83,57 @@ func (s *MetadataLookupService) EnrichPackage(pkg inventory.Package) (inventory.
 	}
 	enriched, changed, sourceChanged := applyMetadata(pkg, meta, s.catalog, source.ID)
 	if !changed {
-		return pkg, nil, false
+		return pkg, nil, false, nil
 	}
 	if !sourceChanged {
-		return enriched, nil, true
+		return enriched, nil, true, nil
 	}
-	return enriched, &source, true
+	return enriched, &source, true, nil
 }
 
-func (s *MetadataLookupService) lookupMetadata(pkg inventory.Package) (metadata, bool) {
+func (s *MetadataLookupService) lookupMetadata(pkg inventory.Package) (metadata, bool, error) {
 	switch strings.ToLower(strings.TrimSpace(pkg.Ecosystem)) {
 	case "node":
 		if s.mode != MetadataLookupModeRemote {
 			for _, projectDir := range s.nodeProjectDirs(pkg) {
-				if meta, ok := s.node.resolveFromInstalledPackage(pkg.Name, pkg.Version, projectDir); ok {
-					return meta, true
+				if meta, ok, err := s.node.resolveFromInstalledPackage(pkg.Name, pkg.Version, projectDir); err != nil {
+					return metadata{}, false, err
+				} else if ok {
+					return meta, true, nil
 				}
 			}
 		}
 		if s.mode == MetadataLookupModeLocal {
-			return metadata{}, false
+			return metadata{}, false, nil
 		}
 		meta := s.node.resolveRemote(pkg.Name, pkg.Version)
-		return meta, strings.TrimSpace(meta.Source) != "" && meta.Source != "fallback"
+		return meta, strings.TrimSpace(meta.Source) != "" && meta.Source != "fallback", nil
 	case "dotnet":
 		if s.mode != MetadataLookupModeRemote {
-			if meta, ok := s.nuget.resolveFromGlobalPackages(pkg.Name, pkg.Version); ok {
-				return meta, true
+			if meta, ok, err := s.nuget.resolveFromGlobalPackages(pkg.Name, pkg.Version); err != nil {
+				return metadata{}, false, err
+			} else if ok {
+				return meta, true, nil
 			}
 		}
 		if s.mode == MetadataLookupModeLocal {
-			return metadata{}, false
+			return metadata{}, false, nil
 		}
-		meta, ok := s.nuget.resolveFromRegistration(pkg.Name, pkg.Version)
+		meta, ok, err := s.nuget.resolveFromRegistration(pkg.Name, pkg.Version)
+		if err != nil {
+			return metadata{}, false, err
+		}
 		if ok {
-			return meta, true
+			return meta, true, nil
 		}
 		return metadata{
 			RawLicense: "Unknown",
 			Holder:     pkg.Name,
 			Year:       now().Year(),
 			Source:     "fallback",
-		}, false
+		}, false, nil
 	default:
-		return metadata{}, false
+		return metadata{}, false, nil
 	}
 }
 

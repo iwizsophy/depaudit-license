@@ -22,6 +22,8 @@ Supported CLI input kinds:
 - `cyclonedx-json=<path>`
 - `spdx-json=<path>`
 
+Runtime-level CLI defaults can also be loaded from a versioned `-config` JSON. The precedence contract is `CLI > env > runtime config > built-in default`, while list-valued settings such as `inputs` and `licenseCatalogs` are replaced rather than merged when the CLI specifies them.
+
 Multiple `-input` flags are merged into one normalized inventory.
 
 ## Supported ecosystems
@@ -87,6 +89,8 @@ This keeps local package-manager resolution close to the input that can actually
 For NuGet specifically, enrichment first checks the local global-packages cache and then the remote registration/package endpoints. When registration metadata does not expose a usable SPDX expression, the resolver can read embedded `<license type="file">` content from the package archive so text-based catalog normalization still has a chance to classify the license.
 
 External HTTP calls used by metadata enrichment and vulnerability assessment are intentionally configurable. npm registry, NuGet registration, OSV, GitHub Advisory, and NVD endpoints can be redirected to mirrors or proxies, and metadata/vulnerability API requests can be cached with explicit `off`, `use`, `refresh`, and `cache-only` modes plus TTL control. The endpoints actually used during a run are emitted in JSON outputs as `provenance.externalSources`, while remote license catalogs keep their own `provenance.catalogSources` and stale-fallback cache because catalog layering and pinning semantics are treated as a distinct contract from generic HTTP response reuse.
+
+Artifact-backed resolution is treated separately from metadata caching. Local package-manager artifacts and remote package-content fallback both use explicit safety limits for total package artifact size, metadata file size, embedded license file size, and archive entry count. Breaching those limits is considered an abnormal input condition and aborts the run instead of degrading into review-only output.
 
 Package-level provenance is stricter. Local package-manager artifacts are the primary evidence path and can be recorded even when enrichment does not need to change any normalized package fields. If enrichment has to fall back to a remote source because no local package-manager artifact is available, the package is annotated with `provenance.artifactResolution`, marked `reviewRequired`, and surfaced through a warning/diagnostic instead of being treated as equivalent to a local-artifact-backed result.
 

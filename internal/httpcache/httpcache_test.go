@@ -484,6 +484,10 @@ func TestWrapClientNilClientAndUnsupportedRequestsBypassCache(t *testing.T) {
 func TestReadRequestBodyAndCacheHelpersHandleErrorPaths(t *testing.T) {
 	t.Parallel()
 
+	if body, err := readRequestBody(nil); err != nil || body != nil {
+		t.Fatalf("nil request body = %#v %v", body, err)
+	}
+
 	req, err := http.NewRequest(http.MethodPost, "https://example.test/query", bytes.NewBufferString(`{"q":1}`))
 	if err != nil {
 		t.Fatalf("new request: %v", err)
@@ -508,6 +512,16 @@ func TestReadRequestBodyAndCacheHelpersHandleErrorPaths(t *testing.T) {
 		t.Fatal("expected getbody error")
 	}
 
+	req, err = http.NewRequest(http.MethodPost, "https://example.test/query", bytes.NewBufferString(`{"q":2}`))
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.GetBody = nil
+	body, err = readRequestBody(req)
+	if err != nil || string(body) != `{"q":2}` {
+		t.Fatalf("read body path = %q %v", string(body), err)
+	}
+
 	path := filepath.Join(t.TempDir(), "broken.json")
 	if err := os.WriteFile(path, []byte("{not-json"), 0o644); err != nil {
 		t.Fatalf("write broken cache: %v", err)
@@ -524,6 +538,47 @@ func TestReadRequestBodyAndCacheHelpersHandleErrorPaths(t *testing.T) {
 	}
 
 	writeWarning(nil, "ignored %s", "warning")
+}
+
+func TestDefaultDirAndVaryHashHelpers(t *testing.T) {
+	t.Parallel()
+
+	if got := DefaultDir(); filepath.Base(got) != "http-cache" {
+		t.Fatalf("DefaultDir = %q", got)
+	}
+	if got := requestVaryHash(nil); got == "" {
+		t.Fatal("expected nil request vary hash")
+	}
+
+	reqA, err := http.NewRequest(http.MethodGet, "https://example.test", nil)
+	if err != nil {
+		t.Fatalf("new request A: %v", err)
+	}
+	reqA.Header.Set("Authorization", "Bearer token-a")
+	reqA.Header.Set("Content-Type", "application/json")
+
+	reqB, err := http.NewRequest(http.MethodGet, "https://example.test", nil)
+	if err != nil {
+		t.Fatalf("new request B: %v", err)
+	}
+	reqB.Header.Set("Authorization", "Bearer token-b")
+	reqB.Header.Set("Content-Type", "application/json")
+
+	if requestVaryHash(reqA) == requestVaryHash(reqB) {
+		t.Fatal("expected secret-sensitive vary hash to change")
+	}
+	if hashSecretHeader("") != "" {
+		t.Fatal("expected empty secret hash")
+	}
+}
+
+func TestWriteCacheIgnoresBlankPath(t *testing.T) {
+	t.Parallel()
+
+	err := writeCache("", cachedResponse{StatusCode: http.StatusOK})
+	if err != nil {
+		t.Fatalf("writeCache blank path: %v", err)
+	}
 }
 
 func base64String(value string) string {

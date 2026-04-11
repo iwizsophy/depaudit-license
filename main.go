@@ -26,40 +26,44 @@ import (
 )
 
 type config struct {
-	inputs                []input.SourceSpec
-	outputHTML            string
-	outputJSON            string
-	outputLegalNoticeHTML string
-	outputVulnHTML        string
-	outputVulnJSON        string
-	vulnMode              string
-	licenseCatalogs       []string
-	locale                string
-	licenseTextBundle     string
-	licenseOverridePath   string
-	excludePolicyPath     string
-	excludePolicy         policy.File
-	licenseOverride       licenseoverride.File
-	remoteCatalogMode     string
-	remoteCatalogCacheDir string
-	httpCacheMode         string
-	httpCacheDir          string
-	httpCacheTTL          time.Duration
-	templatePath          string
-	themeCSSPath          string
-	legalTemplatePath     string
-	legalThemeCSSPath     string
-	vulnTemplatePath      string
-	vulnThemeCSSPath      string
-	npmRegistryBaseURL    string
-	nugetRegistrationURL  string
-	osvBaseURL            string
-	gitHubAdvisoryBaseURL string
-	gitHubAdvisoryToken   string
-	nvdBaseURL            string
-	nvdAPIKey             string
-	excludePatterns       []string
-	timeout               time.Duration
+	inputs                   []input.SourceSpec
+	outputHTML               string
+	outputJSON               string
+	outputLegalNoticeHTML    string
+	outputVulnHTML           string
+	outputVulnJSON           string
+	vulnMode                 string
+	licenseCatalogs          []string
+	locale                   string
+	licenseTextBundle        string
+	licenseOverridePath      string
+	excludePolicyPath        string
+	excludePolicy            policy.File
+	licenseOverride          licenseoverride.File
+	remoteCatalogMode        string
+	remoteCatalogCacheDir    string
+	httpCacheMode            string
+	httpCacheDir             string
+	httpCacheTTL             time.Duration
+	templatePath             string
+	themeCSSPath             string
+	legalTemplatePath        string
+	legalThemeCSSPath        string
+	vulnTemplatePath         string
+	vulnThemeCSSPath         string
+	npmRegistryBaseURL       string
+	nugetRegistrationURL     string
+	osvBaseURL               string
+	gitHubAdvisoryBaseURL    string
+	gitHubAdvisoryToken      string
+	nvdBaseURL               string
+	nvdAPIKey                string
+	maxPackageArtifactBytes  int64
+	maxPackageMetadataBytes  int64
+	maxEmbeddedLicenseBytes  int64
+	maxPackageArchiveEntries int
+	excludePatterns          []string
+	timeout                  time.Duration
 }
 
 var (
@@ -155,6 +159,12 @@ func run(args []string, stdout io.Writer) error {
 			return err
 		}
 	}
+	artifactReadLimits := scan.ArtifactReadLimits{
+		MaxPackageArtifactBytes:  cfg.maxPackageArtifactBytes,
+		MaxPackageMetadataBytes:  cfg.maxPackageMetadataBytes,
+		MaxEmbeddedLicenseBytes:  cfg.maxEmbeddedLicenseBytes,
+		MaxPackageArchiveEntries: cfg.maxPackageArchiveEntries,
+	}
 
 	inputResult, err := input.Load(input.LoadConfig{
 		Sources:       cfg.inputs,
@@ -162,8 +172,9 @@ func run(args []string, stdout io.Writer) error {
 		SubgraphRules: cfg.excludePolicy.SubgraphExcludes,
 		BeforeMerge: func(source input.SourceSpec, doc inventory.Document) (inventory.Document, error) {
 			return enrich.ApplyLocal(enrich.Config{
-				Catalog:         cat,
-				RepositoryRoots: sourceLocalRepositoryRoots(source),
+				Catalog:            cat,
+				RepositoryRoots:    sourceLocalRepositoryRoots(source),
+				ArtifactReadLimits: artifactReadLimits,
 			}, doc)
 		},
 	})
@@ -175,6 +186,7 @@ func run(args []string, stdout io.Writer) error {
 		Catalog:                  cat,
 		NodeRegistryBaseURL:      cfg.npmRegistryBaseURL,
 		NuGetRegistrationBaseURL: cfg.nugetRegistrationURL,
+		ArtifactReadLimits:       artifactReadLimits,
 	}, inputResult.Document)
 	if err != nil {
 		return err
@@ -282,51 +294,75 @@ func run(args []string, stdout io.Writer) error {
 }
 
 func parseFlags(args []string) (config, error) {
-	var cfg config
+	cfg := defaultRuntimeConfig()
 	var excludePatterns string
-	var timeoutSeconds int
+	timeoutSeconds := 0
 	var licenseCatalogs multiStringFlag
 	var inputs multiStringFlag
+	var configPath string
+
+	runtimeConfig, _, err := loadRuntimeConfig(args)
+	if err != nil {
+		return config{}, err
+	}
+	if err := applyRuntimeConfigDefaults(&cfg, runtimeConfig); err != nil {
+		return config{}, err
+	}
+	excludePatterns = strings.Join(runtimeConfig.ExcludePatterns, ",")
+	timeoutSeconds = int(cfg.timeout / time.Second)
 
 	fs := flag.NewFlagSet("depaudit-license", flag.ContinueOnError)
+	fs.StringVar(&configPath, "config", "", "runtime config JSON path")
 	fs.Var(&inputs, "input", "input source as kind=location; repeat for multiple sources (repository-scan, cyclonedx-json, spdx-json)")
-	fs.StringVar(&cfg.outputHTML, "output-html", filepath.Join("dist", "depaudit-license.html"), "output HTML path")
-	fs.StringVar(&cfg.outputJSON, "output-json", filepath.Join("dist", "depaudit-license.json"), "output JSON path")
-	fs.StringVar(&cfg.outputLegalNoticeHTML, "output-legal-html", filepath.Join("dist", "depaudit-license-legal-notice.html"), "output legal notice HTML path")
-	fs.StringVar(&cfg.outputVulnHTML, "output-vuln-html", "", "output vulnerability checklist HTML path")
-	fs.StringVar(&cfg.outputVulnJSON, "output-vuln-json", "", "output vulnerability checklist JSON path")
-	fs.StringVar(&cfg.vulnMode, "vuln-mode", vuln.ModeDisabled, "vulnerability pipeline mode: disabled, osv-only, osv+github, or full")
+	fs.StringVar(&cfg.outputHTML, "output-html", cfg.outputHTML, "output HTML path")
+	fs.StringVar(&cfg.outputJSON, "output-json", cfg.outputJSON, "output JSON path")
+	fs.StringVar(&cfg.outputLegalNoticeHTML, "output-legal-html", cfg.outputLegalNoticeHTML, "output legal notice HTML path")
+	fs.StringVar(&cfg.outputVulnHTML, "output-vuln-html", cfg.outputVulnHTML, "output vulnerability checklist HTML path")
+	fs.StringVar(&cfg.outputVulnJSON, "output-vuln-json", cfg.outputVulnJSON, "output vulnerability checklist JSON path")
+	fs.StringVar(&cfg.vulnMode, "vuln-mode", cfg.vulnMode, "vulnerability pipeline mode: disabled, osv-only, osv+github, or full")
 	fs.Var(&licenseCatalogs, "license-catalog", "license catalog JSON path or https URL; specify multiple times to apply later sources as overrides")
-	fs.StringVar(&cfg.locale, "locale", "ja", "license description locale")
-	fs.StringVar(&cfg.licenseTextBundle, "license-text-bundle", "", "license description bundle JSON path; overrides -locale when specified")
-	fs.StringVar(&cfg.licenseOverridePath, "license-override-file", "", "package-level license override JSON path")
-	fs.StringVar(&cfg.excludePolicyPath, "exclude-policy", "", "exclude policy JSON path")
-	fs.StringVar(&cfg.remoteCatalogMode, "remote-catalog-mode", catalog.RemoteCatalogModeFailFast, "remote catalog mode: fail-fast or stale-fallback")
-	fs.StringVar(&cfg.remoteCatalogCacheDir, "remote-catalog-cache-dir", "", "remote catalog cache directory; default is the user cache directory")
-	fs.StringVar(&cfg.httpCacheMode, "http-cache-mode", httpcache.ModeUse, "HTTP cache mode: off, use, refresh, or cache-only")
-	fs.StringVar(&cfg.httpCacheDir, "http-cache-dir", "", "HTTP cache directory; default is the user cache directory")
-	fs.DurationVar(&cfg.httpCacheTTL, "http-cache-ttl", 24*time.Hour, "HTTP cache TTL (0 disables expiration)")
-	fs.StringVar(&cfg.templatePath, "template", filepath.Join("templates", "report.html.tmpl"), "HTML template path")
-	fs.StringVar(&cfg.themeCSSPath, "theme-css", filepath.Join("templates", "report.css"), "theme CSS path")
-	fs.StringVar(&cfg.legalTemplatePath, "legal-template", filepath.Join("templates", "legal_notice.html.tmpl"), "legal notice HTML template path")
-	fs.StringVar(&cfg.legalThemeCSSPath, "legal-theme-css", filepath.Join("templates", "legal_notice.css"), "legal notice CSS path")
-	fs.StringVar(&cfg.vulnTemplatePath, "vuln-template", filepath.Join("templates", "vulnerability_checklist.html.tmpl"), "vulnerability checklist HTML template path")
-	fs.StringVar(&cfg.vulnThemeCSSPath, "vuln-theme-css", filepath.Join("templates", "vulnerability_checklist.css"), "vulnerability checklist CSS path")
-	fs.StringVar(&cfg.npmRegistryBaseURL, "npm-registry-base-url", "", "npm registry metadata base URL")
-	fs.StringVar(&cfg.nugetRegistrationURL, "nuget-registration-base-url", "", "NuGet registration base URL")
-	fs.StringVar(&cfg.osvBaseURL, "osv-base-url", vuln.DefaultOSVBaseURL, "OSV API base URL")
-	fs.StringVar(&cfg.gitHubAdvisoryBaseURL, "github-advisory-base-url", vuln.DefaultGitHubAdvisoryBaseURL, "GitHub Advisory API base URL")
-	fs.StringVar(&cfg.gitHubAdvisoryToken, "github-advisory-token", "", "GitHub Advisory API token; env fallback: DEPAUDIT_LICENSE_GITHUB_ADVISORY_TOKEN, GITHUB_TOKEN, GH_TOKEN")
-	fs.StringVar(&cfg.nvdBaseURL, "nvd-base-url", vuln.DefaultNVDBaseURL, "NVD API base URL")
-	fs.StringVar(&cfg.nvdAPIKey, "nvd-api-key", "", "NVD API key; env fallback: DEPAUDIT_LICENSE_NVD_API_KEY or NVD_API_KEY")
-	fs.StringVar(&excludePatterns, "exclude-patterns", "", "comma-separated package name fragments to exclude from production notices")
-	fs.IntVar(&timeoutSeconds, "timeout-seconds", 15, "HTTP timeout in seconds")
+	fs.StringVar(&cfg.locale, "locale", cfg.locale, "license description locale")
+	fs.StringVar(&cfg.licenseTextBundle, "license-text-bundle", cfg.licenseTextBundle, "license description bundle JSON path; overrides -locale when specified")
+	fs.StringVar(&cfg.licenseOverridePath, "license-override-file", cfg.licenseOverridePath, "package-level license override JSON path")
+	fs.StringVar(&cfg.excludePolicyPath, "exclude-policy", cfg.excludePolicyPath, "exclude policy JSON path")
+	fs.StringVar(&cfg.remoteCatalogMode, "remote-catalog-mode", cfg.remoteCatalogMode, "remote catalog mode: fail-fast or stale-fallback")
+	fs.StringVar(&cfg.remoteCatalogCacheDir, "remote-catalog-cache-dir", cfg.remoteCatalogCacheDir, "remote catalog cache directory; default is the user cache directory")
+	fs.StringVar(&cfg.httpCacheMode, "http-cache-mode", cfg.httpCacheMode, "HTTP cache mode: off, use, refresh, or cache-only")
+	fs.StringVar(&cfg.httpCacheDir, "http-cache-dir", cfg.httpCacheDir, "HTTP cache directory; default is the user cache directory")
+	fs.DurationVar(&cfg.httpCacheTTL, "http-cache-ttl", cfg.httpCacheTTL, "HTTP cache TTL (0 disables expiration)")
+	fs.StringVar(&cfg.templatePath, "template", cfg.templatePath, "HTML template path")
+	fs.StringVar(&cfg.themeCSSPath, "theme-css", cfg.themeCSSPath, "theme CSS path")
+	fs.StringVar(&cfg.legalTemplatePath, "legal-template", cfg.legalTemplatePath, "legal notice HTML template path")
+	fs.StringVar(&cfg.legalThemeCSSPath, "legal-theme-css", cfg.legalThemeCSSPath, "legal notice CSS path")
+	fs.StringVar(&cfg.vulnTemplatePath, "vuln-template", cfg.vulnTemplatePath, "vulnerability checklist HTML template path")
+	fs.StringVar(&cfg.vulnThemeCSSPath, "vuln-theme-css", cfg.vulnThemeCSSPath, "vulnerability checklist CSS path")
+	fs.StringVar(&cfg.npmRegistryBaseURL, "npm-registry-base-url", cfg.npmRegistryBaseURL, "npm registry metadata base URL")
+	fs.StringVar(&cfg.nugetRegistrationURL, "nuget-registration-base-url", cfg.nugetRegistrationURL, "NuGet registration base URL")
+	fs.StringVar(&cfg.osvBaseURL, "osv-base-url", cfg.osvBaseURL, "OSV API base URL")
+	fs.StringVar(&cfg.gitHubAdvisoryBaseURL, "github-advisory-base-url", cfg.gitHubAdvisoryBaseURL, "GitHub Advisory API base URL")
+	fs.StringVar(&cfg.gitHubAdvisoryToken, "github-advisory-token", cfg.gitHubAdvisoryToken, "GitHub Advisory API token; env fallback: DEPAUDIT_LICENSE_GITHUB_ADVISORY_TOKEN, GITHUB_TOKEN, GH_TOKEN")
+	fs.StringVar(&cfg.nvdBaseURL, "nvd-base-url", cfg.nvdBaseURL, "NVD API base URL")
+	fs.StringVar(&cfg.nvdAPIKey, "nvd-api-key", cfg.nvdAPIKey, "NVD API key; env fallback: DEPAUDIT_LICENSE_NVD_API_KEY or NVD_API_KEY")
+	fs.Int64Var(&cfg.maxPackageArtifactBytes, "max-package-artifact-bytes", cfg.maxPackageArtifactBytes, "maximum bytes allowed for a package artifact fetched into memory")
+	fs.Int64Var(&cfg.maxPackageMetadataBytes, "max-package-metadata-bytes", cfg.maxPackageMetadataBytes, "maximum bytes allowed for a package metadata file loaded into memory")
+	fs.Int64Var(&cfg.maxEmbeddedLicenseBytes, "max-embedded-license-bytes", cfg.maxEmbeddedLicenseBytes, "maximum bytes allowed for an embedded license file loaded into memory")
+	fs.IntVar(&cfg.maxPackageArchiveEntries, "max-package-archive-entries", cfg.maxPackageArchiveEntries, "maximum archive entries allowed when inspecting package artifacts")
+	fs.StringVar(&excludePatterns, "exclude-patterns", excludePatterns, "comma-separated package name fragments to exclude from production notices")
+	fs.IntVar(&timeoutSeconds, "timeout-seconds", timeoutSeconds, "HTTP timeout in seconds")
 	if err := fs.Parse(args); err != nil {
 		return config{}, err
 	}
+	visitedFlags := make(map[string]struct{})
+	fs.Visit(func(f *flag.Flag) {
+		visitedFlags[f.Name] = struct{}{}
+	})
 
 	if len(inputs) == 0 {
-		inputs = append(inputs, input.InputKindRepositoryScan+"=.")
+		if len(runtimeConfig.Inputs) > 0 {
+			inputs = append(inputs, runtimeConfig.Inputs...)
+		} else {
+			inputs = append(inputs, input.InputKindRepositoryScan+"=.")
+		}
 	}
 	resolvedInputs, err := resolveInputSources(inputs)
 	if err != nil {
@@ -343,7 +379,11 @@ func parseFlags(args []string) (config, error) {
 		cfg.outputVulnJSON = mustAbs(cfg.outputVulnJSON)
 	}
 	if len(licenseCatalogs) == 0 {
-		licenseCatalogs = append(licenseCatalogs, filepath.Join("configs", "licenses.json"))
+		if len(runtimeConfig.LicenseCatalogs) > 0 {
+			licenseCatalogs = append(licenseCatalogs, runtimeConfig.LicenseCatalogs...)
+		} else {
+			licenseCatalogs = append(licenseCatalogs, filepath.Join("configs", "licenses.json"))
+		}
 	}
 	cfg.licenseCatalogs = append([]string(nil), licenseCatalogs...)
 	cfg.excludePatterns = splitPatterns(excludePatterns)
@@ -371,17 +411,21 @@ func parseFlags(args []string) (config, error) {
 	if vulnerabilityOutputsEnabled(cfg) && strings.TrimSpace(cfg.vulnMode) == vuln.ModeDisabled {
 		cfg.vulnMode = vuln.ModeOSVOnly
 	}
-	cfg.gitHubAdvisoryToken = firstNonEmptyString(
-		cfg.gitHubAdvisoryToken,
-		strings.TrimSpace(os.Getenv("DEPAUDIT_LICENSE_GITHUB_ADVISORY_TOKEN")),
-		strings.TrimSpace(os.Getenv("GITHUB_TOKEN")),
-		strings.TrimSpace(os.Getenv("GH_TOKEN")),
-	)
-	cfg.nvdAPIKey = firstNonEmptyString(
-		cfg.nvdAPIKey,
-		strings.TrimSpace(os.Getenv("DEPAUDIT_LICENSE_NVD_API_KEY")),
-		strings.TrimSpace(os.Getenv("NVD_API_KEY")),
-	)
+	if _, ok := visitedFlags["github-advisory-token"]; !ok {
+		cfg.gitHubAdvisoryToken = firstNonEmptyString(
+			strings.TrimSpace(os.Getenv("DEPAUDIT_LICENSE_GITHUB_ADVISORY_TOKEN")),
+			strings.TrimSpace(os.Getenv("GITHUB_TOKEN")),
+			strings.TrimSpace(os.Getenv("GH_TOKEN")),
+			cfg.gitHubAdvisoryToken,
+		)
+	}
+	if _, ok := visitedFlags["nvd-api-key"]; !ok {
+		cfg.nvdAPIKey = firstNonEmptyString(
+			strings.TrimSpace(os.Getenv("DEPAUDIT_LICENSE_NVD_API_KEY")),
+			strings.TrimSpace(os.Getenv("NVD_API_KEY")),
+			cfg.nvdAPIKey,
+		)
+	}
 	cfg.timeout = time.Duration(timeoutSeconds) * time.Second
 	if err := validateConfig(cfg); err != nil {
 		return config{}, err
@@ -531,7 +575,12 @@ func validateConfig(cfg config) error {
 	}); err != nil {
 		return err
 	}
-	return nil
+	return scan.ValidateArtifactReadLimits(scan.ArtifactReadLimits{
+		MaxPackageArtifactBytes:  cfg.maxPackageArtifactBytes,
+		MaxPackageMetadataBytes:  cfg.maxPackageMetadataBytes,
+		MaxEmbeddedLicenseBytes:  cfg.maxEmbeddedLicenseBytes,
+		MaxPackageArchiveEntries: cfg.maxPackageArchiveEntries,
+	})
 }
 
 func buildHTTPClient(client *http.Client, cfg config, requestObserver func(*http.Request)) (*http.Client, error) {

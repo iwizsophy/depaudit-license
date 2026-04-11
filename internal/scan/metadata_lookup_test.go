@@ -53,7 +53,7 @@ func TestMetadataLookupServiceEnrichPackageUsesInstalledNodeMetadata(t *testing.
 		RepositoryRoots: []string{filepath.Join(root, "web"), filepath.Join(root, "web")},
 		Mode:            MetadataLookupModeFull,
 	})
-	pkg, source, changed := service.EnrichPackage(inventory.Package{
+	pkg, source, changed, err := service.EnrichPackage(inventory.Package{
 		Ecosystem:  "node",
 		Project:    "web",
 		Name:       "react",
@@ -62,6 +62,9 @@ func TestMetadataLookupServiceEnrichPackageUsesInstalledNodeMetadata(t *testing.
 		LicenseKey: cat.Fallback,
 		Provenance: inventory.PackageProvenance{SourceIDs: []string{"repo-scan"}},
 	})
+	if err != nil {
+		t.Fatalf("enrich package: %v", err)
+	}
 	if !changed {
 		t.Fatal("expected package to be enriched")
 	}
@@ -163,21 +166,26 @@ func TestMetadataLookupServiceFallbacks(t *testing.T) {
 		RepositoryRoots: []string{"", " /repo ", "/repo"},
 		Mode:            MetadataLookupModeFull,
 	})
-	if _, _, changed := service.EnrichPackage(inventory.Package{
+	if _, _, changed, err := service.EnrichPackage(inventory.Package{
 		Ecosystem: "generic",
 		Name:      "custom",
 		Version:   "1.0.0",
-	}); changed {
+	}); err != nil {
+		t.Fatalf("enrich package: %v", err)
+	} else if changed {
 		t.Fatal("expected unsupported ecosystem to skip enrichment")
 	}
 
-	pkg, source, changed := service.EnrichPackage(inventory.Package{
+	pkg, source, changed, err := service.EnrichPackage(inventory.Package{
 		Ecosystem:  "node",
 		Project:    "web",
 		Name:       "missing-package",
 		Version:    "1.0.0",
 		LicenseKey: cat.Fallback,
 	})
+	if err != nil {
+		t.Fatalf("enrich package: %v", err)
+	}
 	if changed || source != nil || pkg.Name != "missing-package" {
 		t.Fatalf("unexpected fallback enrichment result: %#v %#v %v", pkg, source, changed)
 	}
@@ -247,7 +255,10 @@ func TestMetadataLookupServiceEnrichPackageReturnsNoSourceWhenNoChangesApply(t *
 		},
 	}
 
-	pkg, source, changed := service.EnrichPackage(original)
+	pkg, source, changed, err := service.EnrichPackage(original)
+	if err != nil {
+		t.Fatalf("enrich package: %v", err)
+	}
 	if !changed || source != nil {
 		t.Fatalf("expected local artifact-only enrichment, got %#v %#v %v", pkg, source, changed)
 	}
@@ -296,11 +307,14 @@ func TestMetadataLookupServiceLookupBranches(t *testing.T) {
 		Mode:                MetadataLookupModeFull,
 	})
 
-	meta, ok := service.lookupMetadata(inventory.Package{
+	meta, ok, err := service.lookupMetadata(inventory.Package{
 		Ecosystem: "node",
 		Name:      "react",
 		Version:   "19.2.4",
 	})
+	if err != nil {
+		t.Fatalf("lookup metadata: %v", err)
+	}
 	if !ok || meta.Source != "npm-registry-version" {
 		t.Fatalf("node lookup = %#v %v", meta, ok)
 	}
@@ -308,11 +322,14 @@ func TestMetadataLookupServiceLookupBranches(t *testing.T) {
 		t.Fatalf("node artifact resolution = %#v", meta.ArtifactResolution)
 	}
 
-	meta, ok = service.lookupMetadata(inventory.Package{
+	meta, ok, err = service.lookupMetadata(inventory.Package{
 		Ecosystem: "node",
 		Name:      "react",
 		Version:   "^19.0.0",
 	})
+	if err != nil {
+		t.Fatalf("lookup metadata: %v", err)
+	}
 	if ok || meta.Source != "fallback" {
 		t.Fatalf("node fallback lookup = %#v %v", meta, ok)
 	}
@@ -331,11 +348,14 @@ func TestMetadataLookupServiceLookupBranches(t *testing.T) {
 		NuGetGlobalPackagesRoot: root,
 		Mode:                    MetadataLookupModeFull,
 	})
-	meta, ok = service.lookupMetadata(inventory.Package{
+	meta, ok, err = service.lookupMetadata(inventory.Package{
 		Ecosystem: "dotnet",
 		Name:      "Newtonsoft.Json",
 		Version:   "13.0.3",
 	})
+	if err != nil {
+		t.Fatalf("lookup metadata: %v", err)
+	}
 	if !ok || meta.Source != "nuget-global-packages" {
 		t.Fatalf("dotnet lookup = %#v %v", meta, ok)
 	}
@@ -374,7 +394,7 @@ func TestMetadataLookupServiceEnrichPackageUsesDotNetMetadata(t *testing.T) {
 		NuGetGlobalPackagesRoot: root,
 		Mode:                    MetadataLookupModeFull,
 	})
-	pkg, source, changed := service.EnrichPackage(inventory.Package{
+	pkg, source, changed, err := service.EnrichPackage(inventory.Package{
 		Ecosystem:  "dotnet",
 		Name:       "Newtonsoft.Json",
 		Version:    "13.0.3",
@@ -384,6 +404,9 @@ func TestMetadataLookupServiceEnrichPackageUsesDotNetMetadata(t *testing.T) {
 			SourceIDs: []string{"repo-scan"},
 		},
 	})
+	if err != nil {
+		t.Fatalf("enrich package: %v", err)
+	}
 	if !changed || source == nil || source.Kind != MetadataEnrichmentSourceKind {
 		t.Fatalf("dotnet enrich result = %#v %#v %v", pkg, source, changed)
 	}
@@ -431,13 +454,16 @@ func TestMetadataLookupServiceEnrichPackageResolvesNodeLicenseFileText(t *testin
 		RepositoryRoots: []string{root},
 		Mode:            MetadataLookupModeFull,
 	})
-	pkg, _, changed := service.EnrichPackage(inventory.Package{
+	pkg, _, changed, err := service.EnrichPackage(inventory.Package{
 		Ecosystem:  "node",
 		Project:    "web",
 		Name:       "file-licensed",
 		Version:    "1.0.0",
 		LicenseKey: cat.Fallback,
 	})
+	if err != nil {
+		t.Fatalf("enrich package: %v", err)
+	}
 	if !changed {
 		t.Fatal("expected package to be enriched")
 	}
@@ -480,12 +506,15 @@ func TestMetadataLookupServiceEnrichPackageResolvesNuGetLicenseFileText(t *testi
 		NuGetGlobalPackagesRoot: root,
 		Mode:                    MetadataLookupModeFull,
 	})
-	pkg, _, changed := service.EnrichPackage(inventory.Package{
+	pkg, _, changed, err := service.EnrichPackage(inventory.Package{
 		Ecosystem:  "dotnet",
 		Name:       "File.Licensed",
 		Version:    "1.0.0",
 		LicenseKey: cat.Fallback,
 	})
+	if err != nil {
+		t.Fatalf("enrich package: %v", err)
+	}
 	if !changed {
 		t.Fatal("expected package to be enriched")
 	}
@@ -647,11 +676,14 @@ func TestMetadataLookupServiceDotNetFallbackLookupReturnsNotFound(t *testing.T) 
 	t.Parallel()
 
 	service := mustNewMetadataLookupService(t, MetadataLookupConfig{Mode: MetadataLookupModeFull})
-	meta, ok := service.lookupMetadata(inventory.Package{
+	meta, ok, err := service.lookupMetadata(inventory.Package{
 		Ecosystem: "dotnet",
 		Name:      "Missing.Package",
 		Version:   "1.0.0",
 	})
+	if err != nil {
+		t.Fatalf("lookup metadata: %v", err)
+	}
 	if ok || meta.Source != "fallback" {
 		t.Fatalf("dotnet fallback lookup = %#v %v", meta, ok)
 	}
@@ -665,5 +697,45 @@ func TestNewMetadataLookupServiceRequiresExplicitMode(t *testing.T) {
 	}
 	if _, err := NewMetadataLookupService(MetadataLookupConfig{Mode: "invalid"}); err == nil {
 		t.Fatal("expected invalid mode error")
+	}
+}
+
+func TestResolveLicenseKeyFromMetadataBranches(t *testing.T) {
+	t.Parallel()
+
+	cat, err := catalog.Load(filepath.Join("..", "..", "configs", "licenses.json"))
+	if err != nil {
+		t.Fatalf("load catalog: %v", err)
+	}
+
+	if got := resolveLicenseKeyFromMetadata(inventory.Package{}, metadata{}, nil); got != "" {
+		t.Fatalf("nil catalog result = %q", got)
+	}
+
+	got := resolveLicenseKeyFromMetadata(
+		inventory.Package{RawLicense: "Unknown"},
+		metadata{EmbeddedLicenseText: "MIT License\n\nCopyright (c) 2024 Example"},
+		cat,
+	)
+	if got != "MIT" {
+		t.Fatalf("embedded text fallback = %q", got)
+	}
+
+	got = resolveLicenseKeyFromMetadata(
+		inventory.Package{RawLicense: "Custom-Unknown"},
+		metadata{},
+		cat,
+	)
+	if got != cat.Fallback {
+		t.Fatalf("raw fallback = %q", got)
+	}
+
+	got = resolveLicenseKeyFromMetadata(
+		inventory.Package{},
+		metadata{EmbeddedLicenseText: "Apache License\nVersion 2.0, January 2004"},
+		cat,
+	)
+	if got != "Apache-2.0" {
+		t.Fatalf("embedded text only = %q", got)
 	}
 }

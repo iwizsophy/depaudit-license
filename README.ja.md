@@ -139,6 +139,14 @@ macOS:
   -vuln-mode full
 ```
 
+例: 実行設定を config file に寄せ、repository path だけ CLI で上書きする:
+
+```powershell
+.\depaudit-license-windows-amd64.exe `
+  -config .\configs\depaudit-license.config.json `
+  -input repository-scan=.\my-repository
+```
+
 ## カスタマイズ
 
 ライセンス定義と説明文:
@@ -199,6 +207,17 @@ package 単位の license override:
 - `-template`, `-theme-css`
 - `-legal-template`, `-legal-theme-css`
 - `-vuln-template`, `-vuln-theme-css`
+- `-config` は CLI 実行設定 JSON を読み込みます
+
+runtime config:
+
+- `-config <path>` で versioned な実行設定 JSON を読み込みます
+- 優先順位は `CLI > env > runtime config > built-in default` です
+- runtime config 内のローカル path は config file 自身の配置ディレクトリ基準で解決されます
+- `inputs` と `licenseCatalogs` は list 設定なので、CLI で `-input` または `-license-catalog` を 1 件でも指定した場合は runtime config 側の list を置き換えます
+- schema / sample:
+  - [configs/runtime-config.schema.json](configs/runtime-config.schema.json)
+  - [configs/runtime-config.sample.json](configs/runtime-config.sample.json)
 
 package 内の同梱ライセンス本文を検出した場合、CLI は legal notice 出力の隣に `license-texts/...` として原文をコピーし、legal notice HTML / JSON から `copiedFilePath` で参照できるようにします。
 
@@ -224,6 +243,10 @@ remote catalog の挙動:
 - `-http-cache-mode off|use|refresh|cache-only`
 - `-http-cache-dir <path>`
 - `-http-cache-ttl 24h`
+- `-max-package-artifact-bytes 268435456`
+- `-max-package-metadata-bytes 1048576`
+- `-max-embedded-license-bytes 4194304`
+- `-max-package-archive-entries 10000`
 - `-npm-registry-base-url <url>`
 - `-nuget-registration-base-url <url>`
 - `-osv-base-url <url>`
@@ -232,7 +255,16 @@ remote catalog の挙動:
 - `-nvd-base-url <url>`
 - `-nvd-api-key <key>`
 
+secret 系設定の優先順位は次のとおりです。
+
+- CLI flag
+- environment variable
+- runtime config
+- built-in default
+
 `-http-cache-*` は package metadata enrichment と vulnerability API に適用されます。remote license catalog URL については、引き続き `-remote-catalog-mode` / `-remote-catalog-cache-dir` を使い、stale-fallback は catalog 専用挙動として扱います。
+
+artifact に基づく license 解決には、package artifact 本体、package metadata file、embedded license file、package archive entry count の安全上限も適用されます。これらの上限は local package-manager artifact と remote package-content fallback の両方に適用されます。上限を超えた場合は review 用出力へフォールバックせず、その run を error で停止します。
 
 run 中に実際に使用された external metadata / vulnerability endpoint は、report JSON と vulnerability JSON の `provenance.externalSources` にも記録されます。remote license catalog URL は引き続き `provenance.catalogSources` に出力されます。
 

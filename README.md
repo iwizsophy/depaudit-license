@@ -139,6 +139,14 @@ Example: run with vulnerability outputs:
   -vuln-mode full
 ```
 
+Example: load runtime defaults from a config file and override only the repository path:
+
+```powershell
+.\depaudit-license-windows-amd64.exe `
+  -config .\configs\depaudit-license.config.json `
+  -input repository-scan=.\my-repository
+```
+
 ## Customization
 
 License definitions and descriptions:
@@ -199,6 +207,17 @@ Presentation:
 - `-template`, `-theme-css`
 - `-legal-template`, `-legal-theme-css`
 - `-vuln-template`, `-vuln-theme-css`
+- `-config` loads a versioned runtime config JSON for CLI defaults
+
+Runtime config:
+
+- `-config <path>` loads runtime defaults from JSON
+- precedence is `CLI > env > runtime config > built-in default`
+- local paths inside the runtime config are resolved relative to the config file itself
+- `inputs` and `licenseCatalogs` are list settings, so any CLI `-input` or `-license-catalog` replaces the runtime-config list instead of appending to it
+- runtime config schema and sample are available at:
+  - [configs/runtime-config.schema.json](configs/runtime-config.schema.json)
+  - [configs/runtime-config.sample.json](configs/runtime-config.sample.json)
 
 When package-local embedded license text is discovered, the CLI copies that raw text next to the legal notice output under `license-texts/...` and links it from the legal notice HTML / JSON via `copiedFilePath`.
 
@@ -224,6 +243,10 @@ External metadata / vulnerability API behavior:
 - `-http-cache-mode off|use|refresh|cache-only`
 - `-http-cache-dir <path>`
 - `-http-cache-ttl 24h`
+- `-max-package-artifact-bytes 268435456`
+- `-max-package-metadata-bytes 1048576`
+- `-max-embedded-license-bytes 4194304`
+- `-max-package-archive-entries 10000`
 - `-npm-registry-base-url <url>`
 - `-nuget-registration-base-url <url>`
 - `-osv-base-url <url>`
@@ -232,7 +255,16 @@ External metadata / vulnerability API behavior:
 - `-nvd-base-url <url>`
 - `-nvd-api-key <key>`
 
+For secret-like settings, the effective precedence is:
+
+- CLI flag
+- environment variable
+- runtime config
+- built-in default
+
 `-http-cache-*` applies to package metadata enrichment and vulnerability APIs. Remote license catalog URLs continue to use `-remote-catalog-mode` / `-remote-catalog-cache-dir` so stale-fallback behavior remains catalog-specific.
+
+Artifact-backed license resolution also enforces explicit safety limits for package artifacts, package metadata files, embedded license files, and package archive entry counts. The same limits apply to local package-manager artifacts and remote package-content fallback. When one of these limits is exceeded, the run fails with an error instead of falling back to review-only output.
 
 The external metadata and vulnerability endpoints actually used during the run are recorded in report JSON and vulnerability JSON as `provenance.externalSources`. Remote license catalog URLs continue to appear in `provenance.catalogSources`.
 

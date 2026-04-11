@@ -3,6 +3,7 @@ package enrich
 import (
 	"archive/zip"
 	"bytes"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -13,6 +14,7 @@ import (
 
 	"depaudit-license/internal/catalog"
 	"depaudit-license/internal/inventory"
+	"depaudit-license/internal/scan"
 )
 
 func applyAll(cfg Config, doc inventory.Document) (inventory.Document, error) {
@@ -680,5 +682,108 @@ func TestCloneDocumentClonesDiagnostics(t *testing.T) {
 
 	if got := cloneDiagnostics(nil); got != nil {
 		t.Fatalf("cloneDiagnostics nil = %#v", got)
+	}
+}
+
+func TestApplyLocalReturnsErrorForOversizedEmbeddedLicenseFile(t *testing.T) {
+	t.Parallel()
+
+	cat, err := catalog.Load(filepath.Join("..", "..", "configs", "licenses.json"))
+	if err != nil {
+		t.Fatalf("load catalog: %v", err)
+	}
+
+	root := t.TempDir()
+	packageDir := filepath.Join(root, "web", "node_modules", "file-licensed")
+	if err := os.MkdirAll(packageDir, 0o755); err != nil {
+		t.Fatalf("mkdir package dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(packageDir, "package.json"), []byte(`{
+  "name": "file-licensed",
+  "version": "1.0.0",
+  "license": "LICENSE.txt"
+}`), 0o644); err != nil {
+		t.Fatalf("write package.json: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(packageDir, "LICENSE.txt"), []byte("0123456789ABCDEF"), 0o644); err != nil {
+		t.Fatalf("write license file: %v", err)
+	}
+
+	_, err = ApplyLocal(Config{
+		Catalog:         cat,
+		RepositoryRoots: []string{root},
+		ArtifactReadLimits: scan.ArtifactReadLimits{
+			MaxPackageArtifactBytes:  scan.DefaultMaxPackageArtifactBytes,
+			MaxPackageMetadataBytes:  scan.DefaultMaxPackageMetadataBytes,
+			MaxEmbeddedLicenseBytes:  8,
+			MaxPackageArchiveEntries: scan.DefaultMaxPackageArchiveEntries,
+		},
+	}, inventory.Document{
+		Packages: []inventory.Package{{
+			Ecosystem: "node",
+			Project:   "web",
+			Name:      "file-licensed",
+			Version:   "1.0.0",
+		}},
+	})
+	if err == nil {
+		t.Fatal("expected oversized embedded license to fail")
+	}
+	var safetyErr *scan.ArtifactSafetyError
+	if !errors.As(err, &safetyErr) {
+		t.Fatalf("expected ArtifactSafetyError, got %T: %v", err, err)
+	}
+}
+
+func TestApplyRemoteReturnsErrorForOversizedNuGetPackageArtifact(t *testing.T) {
+	t.Parallel()
+
+	cat, err := catalog.Load(filepath.Join("..", "..", "configs", "licenses.json"))
+	if err != nil {
+		t.Fatalf("load catalog: %v", err)
+	}
+
+	var server *httptest.Server
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/sample.package/1.2.3.json":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"catalogEntry":"` + server.URL + `/catalog/sample.package.1.2.3.json","packageContent":"` + server.URL + `/package/sample.package.1.2.3.nupkg"}`))
+		case "/catalog/sample.package.1.2.3.json":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"authors":"Sample Author","published":"2024-02-03T00:00:00Z"}`))
+		case "/package/sample.package.1.2.3.nupkg":
+			w.Header().Set("Content-Type", "application/octet-stream")
+			w.Header().Set("Content-Length", "999")
+			_, _ = w.Write([]byte("short"))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	_, err = ApplyRemote(Config{
+		Client:                   server.Client(),
+		Catalog:                  cat,
+		NuGetRegistrationBaseURL: server.URL,
+		ArtifactReadLimits: scan.ArtifactReadLimits{
+			MaxPackageArtifactBytes:  64,
+			MaxPackageMetadataBytes:  scan.DefaultMaxPackageMetadataBytes,
+			MaxEmbeddedLicenseBytes:  scan.DefaultMaxEmbeddedLicenseBytes,
+			MaxPackageArchiveEntries: scan.DefaultMaxPackageArchiveEntries,
+		},
+	}, inventory.Document{
+		Packages: []inventory.Package{{
+			Ecosystem: "dotnet",
+			Name:      "Sample.Package",
+			Version:   "1.2.3",
+		}},
+	})
+	if err == nil {
+		t.Fatal("expected oversized remote package artifact to fail")
+	}
+	var safetyErr *scan.ArtifactSafetyError
+	if !errors.As(err, &safetyErr) {
+		t.Fatalf("expected ArtifactSafetyError, got %T: %v", err, err)
 	}
 }

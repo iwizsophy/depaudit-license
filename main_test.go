@@ -158,6 +158,9 @@ func TestParseFlagsKeepsExplicitVulnerabilityModeAndTimeout(t *testing.T) {
 	if cfg.httpCacheTTL != 48*time.Hour {
 		t.Fatalf("unexpected http cache ttl: %v", cfg.httpCacheTTL)
 	}
+	if cfg.maxPackageArtifactBytes != 268435456 || cfg.maxPackageMetadataBytes != 1048576 || cfg.maxEmbeddedLicenseBytes != 4194304 || cfg.maxPackageArchiveEntries != 10000 {
+		t.Fatalf("unexpected artifact read limits: %#v", cfg)
+	}
 }
 
 func TestParseFlagsRejectsVulnerabilityModeWithoutOutputs(t *testing.T) {
@@ -192,6 +195,23 @@ func TestParseFlagsRejectsInvalidHTTPCacheConfig(t *testing.T) {
 	}
 	if _, err := parseFlags([]string{"-http-cache-ttl", "-1s"}); err == nil {
 		t.Fatal("expected invalid http cache ttl error")
+	}
+}
+
+func TestParseFlagsRejectsInvalidArtifactReadLimits(t *testing.T) {
+	t.Parallel()
+
+	if _, err := parseFlags([]string{"-max-package-artifact-bytes", "0"}); err == nil {
+		t.Fatal("expected invalid package artifact byte limit")
+	}
+	if _, err := parseFlags([]string{"-max-package-metadata-bytes", "-1"}); err == nil {
+		t.Fatal("expected invalid package metadata byte limit")
+	}
+	if _, err := parseFlags([]string{"-max-embedded-license-bytes", "0"}); err == nil {
+		t.Fatal("expected invalid embedded license byte limit")
+	}
+	if _, err := parseFlags([]string{"-max-package-archive-entries", "0"}); err == nil {
+		t.Fatal("expected invalid package archive entry limit")
 	}
 }
 

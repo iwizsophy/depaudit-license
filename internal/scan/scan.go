@@ -86,9 +86,10 @@ type projectFile struct {
 }
 
 type nodeResolver struct {
-	client          *http.Client
-	cache           map[string]metadata
-	registryBaseURL string
+	client             *http.Client
+	cache              map[string]metadata
+	registryBaseURL    string
+	artifactReadLimits ArtifactReadLimits
 }
 
 func Collect(cfg Config) ([]Package, error) {
@@ -377,28 +378,41 @@ func buildDotNetPackage(projectName string, projectPath string, resolved resolve
 	}
 }
 
-func (r *nodeResolver) resolveFromInstalledPackage(packageName string, version string, projectDir string) (metadata, bool) {
+func (r *nodeResolver) resolveFromInstalledPackage(packageName string, version string, projectDir string) (metadata, bool, error) {
 	packageJSON := installedNodePackageJSONPath(projectDir, packageName)
 	if strings.TrimSpace(packageJSON) == "" {
-		return metadata{}, false
+		return metadata{}, false, nil
 	}
 
-	payload, err := os.ReadFile(packageJSON)
+	limits := NormalizeArtifactReadLimits(r.artifactReadLimits)
+	payload, err := readFileLimited(packageJSON, limits.MaxPackageMetadataBytes)
 	if err != nil {
-		return metadata{}, false
+		if os.IsNotExist(err) {
+			return metadata{}, false, nil
+		}
+		if safetyErr := wrapArtifactSafetyError(packageName, version, packageJSON, "package metadata file", err); safetyErr != nil {
+			return metadata{}, false, safetyErr
+		}
+		return metadata{}, false, nil
 	}
 
 	var file installedNodePackage
 	if err := json.Unmarshal(payload, &file); err != nil {
-		return metadata{}, false
+		return metadata{}, false, nil
 	}
 
 	if isExactNodeVersion(version) && strings.TrimSpace(file.Version) != strings.TrimSpace(version) {
-		return metadata{}, false
+		return metadata{}, false, nil
 	}
 
 	rawLicense := parseLicense(file.License)
-	licensePath, licenseText := resolveNodeEmbeddedLicense(packageJSON, rawLicense)
+	licensePath, licenseText, err := resolveNodeEmbeddedLicense(packageJSON, rawLicense, limits)
+	if err != nil {
+		if safetyErr := wrapArtifactSafetyError(packageName, version, packageJSON, "embedded license file", err); safetyErr != nil {
+			return metadata{}, false, safetyErr
+		}
+		return metadata{}, false, nil
+	}
 	meta := metadata{
 		RawLicense: rawLicense,
 		Repository: parseRepository(file.Repository),
@@ -421,19 +435,22 @@ func (r *nodeResolver) resolveFromInstalledPackage(packageName string, version s
 	if strings.TrimSpace(meta.RawLicense) == "" {
 		meta.RawLicense = "Unknown"
 	}
-	return meta, true
+	return meta, true, nil
 }
 
-func resolveNodeEmbeddedLicense(packageJSONPath string, rawLicense string) (string, string) {
+func resolveNodeEmbeddedLicense(packageJSONPath string, rawLicense string, limits ArtifactReadLimits) (string, string, error) {
 	licensePath := embeddedLicenseFileCandidate(rawLicense)
 	if licensePath == "" {
-		return "", ""
+		return "", "", nil
 	}
-	licenseText := readEmbeddedLicenseFromDirectory(filepath.Dir(packageJSONPath), licensePath)
+	licenseText, err := readEmbeddedLicenseFromDirectory(filepath.Dir(packageJSONPath), licensePath, NormalizeArtifactReadLimits(limits).MaxEmbeddedLicenseBytes)
+	if err != nil {
+		return "", "", err
+	}
 	if strings.TrimSpace(licenseText) == "" {
-		return "", ""
+		return "", "", nil
 	}
-	return licensePath, licenseText
+	return licensePath, licenseText, nil
 }
 
 func embeddedLicenseFileCandidate(rawLicense string) string {

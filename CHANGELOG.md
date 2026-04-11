@@ -18,6 +18,8 @@ No notable changes yet.
 - Configurable endpoint overrides for npm registry and NuGet registration metadata, alongside the existing OSV / GitHub Advisory / NVD base URL settings.
 - Optional GitHub Advisory token and NVD API key settings for environments that need higher external API limits.
 - Report JSON and vulnerability JSON provenance now record the external metadata and vulnerability endpoints actually used during the run in `externalSources`.
+- Configurable artifact safety limits for package artifact size, package metadata size, embedded license size, and archive entry count.
+- Versioned runtime config support via `-config`, with schema/sample files and `CLI > env > runtime config > default` precedence.
 
 ### Changed
 
@@ -25,6 +27,7 @@ No notable changes yet.
 - Package-level provenance now distinguishes local package-manager artifact evidence from remote self-resolved fallback, records local evidence even for no-op enrichment, and emits manual-review-required warnings/diagnostics when no local package-manager artifact was available.
 - README and release-facing documentation now explicitly describe external network access, cache behavior, endpoint overrides, and authentication knobs for rate-limited APIs.
 - Shared HTTP cache keys are now partitioned by auth-sensitive request headers, and cache files are written with restricted permissions so mirrored or authenticated upstreams do not bleed into each other through a shared cache entry.
+- Local and remote artifact-backed license resolution now aborts the run on safety limit breaches instead of downgrading abnormal package content to review-only output.
 
 ## [1.2.0] - 2026-04-10
 

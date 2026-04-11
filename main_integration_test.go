@@ -5433,7 +5433,7 @@ func TestRunMultiSourcePrefersLocalArtifactResolutionOverRemoteReview(t *testing
 				Repository string `json:"repository"`
 				Homepage   string `json:"homepage"`
 				Provenance struct {
-					SourceIDs          []string          `json:"sourceIds"`
+					SourceIDs          []string `json:"sourceIds"`
 					ArtifactResolution struct {
 						Kind           string `json:"kind"`
 						Detail         string `json:"detail"`
@@ -6514,6 +6514,7 @@ func TestRunMultiSourceStaysConsistentAcrossAllOutputs(t *testing.T) {
 		"-output-vuln-json", vulnJSONPath,
 		"-output-vuln-html", vulnHTMLPath,
 		"-osv-base-url", server.URL,
+		"-http-cache-mode", "off",
 	}, &bytes.Buffer{}); err != nil {
 		t.Fatalf("run with multi-source all outputs failed: %v", err)
 	}
@@ -6635,6 +6636,7 @@ func TestRunSPDXMultiSourceStaysConsistentAcrossAllOutputs(t *testing.T) {
 		"-output-vuln-json", vulnJSONPath,
 		"-output-vuln-html", vulnHTMLPath,
 		"-osv-base-url", server.URL,
+		"-http-cache-mode", "off",
 	}, &bytes.Buffer{}); err != nil {
 		t.Fatalf("run with SPDX multi-source all outputs failed: %v", err)
 	}

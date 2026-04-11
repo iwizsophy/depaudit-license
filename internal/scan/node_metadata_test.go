@@ -1,6 +1,7 @@
 package scan
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -137,7 +138,9 @@ func TestNodeResolverInstalledPackageFallbacks(t *testing.T) {
 	t.Parallel()
 
 	resolver := &nodeResolver{cache: map[string]metadata{}}
-	if _, ok := resolver.resolveFromInstalledPackage("react", "18.2.0", ""); ok {
+	if _, ok, err := resolver.resolveFromInstalledPackage("react", "18.2.0", ""); err != nil {
+		t.Fatalf("resolveFromInstalledPackage: %v", err)
+	} else if ok {
 		t.Fatal("expected empty project dir to fail")
 	}
 
@@ -154,7 +157,9 @@ func TestNodeResolverInstalledPackageFallbacks(t *testing.T) {
 		t.Fatalf("write package.json: %v", err)
 	}
 
-	if _, ok := resolver.resolveFromInstalledPackage("react", "18.2.0", root); ok {
+	if _, ok, err := resolver.resolveFromInstalledPackage("react", "18.2.0", root); err != nil {
+		t.Fatalf("resolveFromInstalledPackage: %v", err)
+	} else if ok {
 		t.Fatal("expected exact version mismatch to fail")
 	}
 
@@ -166,7 +171,10 @@ func TestNodeResolverInstalledPackageFallbacks(t *testing.T) {
 		t.Fatalf("rewrite package.json: %v", err)
 	}
 
-	meta, ok := resolver.resolveFromInstalledPackage("react", "^18.0.0", root)
+	meta, ok, err := resolver.resolveFromInstalledPackage("react", "^18.0.0", root)
+	if err != nil {
+		t.Fatalf("resolveFromInstalledPackage: %v", err)
+	}
 	if !ok {
 		t.Fatal("expected range version to accept installed package metadata")
 	}
@@ -191,7 +199,9 @@ func TestNodeResolverInstalledPackageHelperBranches(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(packageDir, "package.json"), []byte(`{invalid`), 0o644); err != nil {
 		t.Fatalf("write invalid package.json: %v", err)
 	}
-	if _, ok := resolver.resolveFromInstalledPackage("react", "19.2.4", root); ok {
+	if _, ok, err := resolver.resolveFromInstalledPackage("react", "19.2.4", root); err != nil {
+		t.Fatalf("resolveFromInstalledPackage: %v", err)
+	} else if ok {
 		t.Fatal("expected invalid package.json to fail")
 	}
 
@@ -205,7 +215,10 @@ func TestNodeResolverInstalledPackageHelperBranches(t *testing.T) {
 		t.Fatalf("write package.json: %v", err)
 	}
 
-	meta, ok := resolver.resolveFromInstalledPackage("react", "19.2.4", root)
+	meta, ok, err := resolver.resolveFromInstalledPackage("react", "19.2.4", root)
+	if err != nil {
+		t.Fatalf("resolveFromInstalledPackage: %v", err)
+	}
 	if !ok {
 		t.Fatal("expected exact version to accept installed package metadata")
 	}
@@ -223,8 +236,48 @@ func TestNodeResolverInstalledPackageHelperBranches(t *testing.T) {
 }`), 0o644); err != nil {
 		t.Fatalf("rewrite package.json: %v", err)
 	}
-	meta, ok = resolver.resolveFromInstalledPackage("react", "19.2.4", root)
+	meta, ok, err = resolver.resolveFromInstalledPackage("react", "19.2.4", root)
+	if err != nil {
+		t.Fatalf("resolveFromInstalledPackage: %v", err)
+	}
 	if !ok || meta.Holder != "Contributor" {
 		t.Fatalf("contributor fallback = %#v %v", meta, ok)
+	}
+}
+
+func TestNodeResolverInstalledPackageRejectsOversizedFiles(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	packageDir := filepath.Join(root, "node_modules", "sample")
+	if err := os.MkdirAll(packageDir, 0o755); err != nil {
+		t.Fatalf("mkdir package dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(packageDir, "package.json"), []byte(`{"name":"sample","version":"1.0.0","license":"LICENSE.txt"}`), 0o644); err != nil {
+		t.Fatalf("write package.json: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(packageDir, "LICENSE.txt"), []byte("0123456789"), 0o644); err != nil {
+		t.Fatalf("write license file: %v", err)
+	}
+
+	_, ok, err := (&nodeResolver{
+		artifactReadLimits: ArtifactReadLimits{MaxPackageMetadataBytes: 8, MaxEmbeddedLicenseBytes: 4},
+	}).resolveFromInstalledPackage("sample", "1.0.0", root)
+	if ok {
+		t.Fatal("expected oversized package metadata to fail")
+	}
+	var safetyErr *ArtifactSafetyError
+	if !errors.As(err, &safetyErr) {
+		t.Fatalf("expected ArtifactSafetyError, got %T: %v", err, err)
+	}
+
+	_, ok, err = (&nodeResolver{
+		artifactReadLimits: ArtifactReadLimits{MaxPackageMetadataBytes: 1024, MaxEmbeddedLicenseBytes: 4},
+	}).resolveFromInstalledPackage("sample", "1.0.0", root)
+	if ok {
+		t.Fatal("expected oversized embedded license to fail")
+	}
+	if !errors.As(err, &safetyErr) {
+		t.Fatalf("expected ArtifactSafetyError, got %T: %v", err, err)
 	}
 }

@@ -3,6 +3,7 @@ package scan
 import (
 	"archive/zip"
 	"bytes"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -130,7 +131,10 @@ func TestNugetResolverGlobalPackagesFieldFallbacks(t *testing.T) {
 		t.Fatalf("write nuspec: %v", err)
 	}
 
-	meta, ok := (&nugetResolver{globalPackagesRoot: root}).resolveFromGlobalPackages("Fallback.Package", "1.0.0")
+	meta, ok, err := (&nugetResolver{globalPackagesRoot: root}).resolveFromGlobalPackages("Fallback.Package", "1.0.0")
+	if err != nil {
+		t.Fatalf("resolveFromGlobalPackages: %v", err)
+	}
 	if !ok {
 		t.Fatal("expected global packages lookup to succeed")
 	}
@@ -283,10 +287,13 @@ func TestNugetResolverPrefersEmbeddedLicenseFileOverRegistrationLicenseURL(t *te
 	}))
 	defer server.Close()
 
-	meta, ok := (&nugetResolver{
+	meta, ok, err := (&nugetResolver{
 		client:              server.Client(),
 		registrationBaseURL: server.URL,
 	}).resolveFromRegistration("Sample.Package", "2.0.0")
+	if err != nil {
+		t.Fatalf("resolveFromRegistration: %v", err)
+	}
 	if !ok {
 		t.Fatal("expected registration lookup to succeed")
 	}
@@ -323,10 +330,13 @@ func TestNugetResolverRegistrationFieldFallbacks(t *testing.T) {
 	}))
 	defer server.Close()
 
-	meta, ok := (&nugetResolver{
+	meta, ok, err := (&nugetResolver{
 		client:              server.Client(),
 		registrationBaseURL: server.URL,
 	}).resolveFromRegistration("Fallback.Package", "2.0.0")
+	if err != nil {
+		t.Fatalf("resolveFromRegistration: %v", err)
+	}
 	if !ok {
 		t.Fatal("expected registration lookup to succeed")
 	}
@@ -361,10 +371,13 @@ func TestNugetResolverRegistrationUsesLicenseURLWhenExpressionMissing(t *testing
 	}))
 	defer server.Close()
 
-	meta, ok := (&nugetResolver{
+	meta, ok, err := (&nugetResolver{
 		client:              server.Client(),
 		registrationBaseURL: server.URL,
 	}).resolveFromRegistration("Sample.Package", "2.0.0")
+	if err != nil {
+		t.Fatalf("resolveFromRegistration: %v", err)
+	}
 	if !ok {
 		t.Fatal("expected registration lookup to succeed")
 	}
@@ -439,7 +452,9 @@ func TestNugetMetadataFailureBranchesAndGlobalRootHelper(t *testing.T) {
 	}
 
 	dir := t.TempDir()
-	if _, ok := (&nugetResolver{globalPackagesRoot: filepath.Join(dir, "missing")}).resolveFromGlobalPackages("Missing.Package", "1.0.0"); ok {
+	if _, ok, err := (&nugetResolver{globalPackagesRoot: filepath.Join(dir, "missing")}).resolveFromGlobalPackages("Missing.Package", "1.0.0"); err != nil {
+		t.Fatalf("resolveFromGlobalPackages: %v", err)
+	} else if ok {
 		t.Fatal("expected missing global package lookup to fail")
 	}
 
@@ -450,14 +465,20 @@ func TestNugetMetadataFailureBranchesAndGlobalRootHelper(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(badDir, "broken.package.nuspec"), []byte(`<package>`), 0o644); err != nil {
 		t.Fatalf("write broken nuspec: %v", err)
 	}
-	if _, ok := (&nugetResolver{globalPackagesRoot: dir}).resolveFromGlobalPackages("Broken.Package", "1.0.0"); ok {
+	if _, ok, err := (&nugetResolver{globalPackagesRoot: dir}).resolveFromGlobalPackages("Broken.Package", "1.0.0"); err != nil {
+		t.Fatalf("resolveFromGlobalPackages: %v", err)
+	} else if ok {
 		t.Fatal("expected broken nuspec lookup to fail")
 	}
 
-	if _, ok := (&nugetResolver{}).resolveFromRegistration("Sample.Package", "1.2.3"); ok {
+	if _, ok, err := (&nugetResolver{}).resolveFromRegistration("Sample.Package", "1.2.3"); err != nil {
+		t.Fatalf("resolveFromRegistration: %v", err)
+	} else if ok {
 		t.Fatal("expected registration lookup without client to fail")
 	}
-	if _, ok := (&nugetResolver{client: http.DefaultClient}).resolveFromRegistration("Sample.Package", ""); ok {
+	if _, ok, err := (&nugetResolver{client: http.DefaultClient}).resolveFromRegistration("Sample.Package", ""); err != nil {
+		t.Fatalf("resolveFromRegistration: %v", err)
+	} else if ok {
 		t.Fatal("expected registration lookup without version to fail")
 	}
 }
@@ -465,7 +486,9 @@ func TestNugetMetadataFailureBranchesAndGlobalRootHelper(t *testing.T) {
 func TestNugetEmbeddedLicenseFailureBranches(t *testing.T) {
 	t.Parallel()
 
-	if got := readEmbeddedLicenseFromDirectory(t.TempDir(), "missing.txt"); got != "" {
+	if got, err := readEmbeddedLicenseFromDirectory(t.TempDir(), "missing.txt", DefaultMaxEmbeddedLicenseBytes); err != nil {
+		t.Fatalf("readEmbeddedLicenseFromDirectory: %v", err)
+	} else if got != "" {
 		t.Fatalf("expected missing directory license to be empty, got %q", got)
 	}
 
@@ -489,10 +512,10 @@ func TestNugetEmbeddedLicenseFailureBranches(t *testing.T) {
 	defer server.Close()
 
 	resolver := &nugetResolver{client: server.Client()}
-	if _, _, err := resolver.resolveEmbeddedLicenseFromPackageContent(server.URL + "/bad.zip"); err == nil {
+	if _, _, err := resolver.resolveEmbeddedLicenseFromPackageContent("Sample.Package", "1.2.3", server.URL+"/bad.zip"); err == nil {
 		t.Fatal("expected bad zip error")
 	}
-	if _, _, err := resolver.resolveEmbeddedLicenseFromPackageContent(server.URL + "/missing-license.zip"); err == nil {
+	if _, _, err := resolver.resolveEmbeddedLicenseFromPackageContent("Sample.Package", "1.2.3", server.URL+"/missing-license.zip"); err == nil {
 		t.Fatal("expected missing embedded license error")
 	}
 }
@@ -519,10 +542,10 @@ func TestNugetEmbeddedLicenseArchiveErrorBranches(t *testing.T) {
 	defer server.Close()
 
 	resolver := &nugetResolver{client: server.Client()}
-	if _, _, err := resolver.resolveEmbeddedLicenseFromPackageContent(server.URL + "/status-error.zip"); err == nil {
+	if _, _, err := resolver.resolveEmbeddedLicenseFromPackageContent("Sample.Package", "1.2.3", server.URL+"/status-error.zip"); err == nil {
 		t.Fatal("expected non-2xx status error")
 	}
-	if _, _, err := resolver.resolveEmbeddedLicenseFromPackageContent(server.URL + "/missing-nuspec.zip"); err == nil {
+	if _, _, err := resolver.resolveEmbeddedLicenseFromPackageContent("Sample.Package", "1.2.3", server.URL+"/missing-nuspec.zip"); err == nil {
 		t.Fatal("expected missing nuspec error")
 	}
 }
@@ -545,7 +568,7 @@ func TestNugetEmbeddedLicenseRequestSetsUserAgent(t *testing.T) {
 	defer server.Close()
 
 	resolver := &nugetResolver{client: server.Client()}
-	licensePath, licenseText, err := resolver.resolveEmbeddedLicenseFromPackageContent(server.URL)
+	licensePath, licenseText, err := resolver.resolveEmbeddedLicenseFromPackageContent("Sample.Package", "1.2.3", server.URL)
 	if err != nil {
 		t.Fatalf("resolveEmbeddedLicenseFromPackageContent: %v", err)
 	}
@@ -565,12 +588,18 @@ func TestResolveNuspecLicenseHelperBranches(t *testing.T) {
 		t.Fatalf("write directory license: %v", err)
 	}
 
-	location, path, text := resolveNuspecLicense("expression", " MIT ", "https://licenses.example/mit", dir, nil)
+	location, path, text, err := resolveNuspecLicense("expression", " MIT ", "https://licenses.example/mit", dir, nil, ArtifactReadLimits{})
+	if err != nil {
+		t.Fatalf("resolveNuspecLicense expression: %v", err)
+	}
 	if location != "MIT" || path != "" || text != "" {
 		t.Fatalf("expression license = %q %q %q", location, path, text)
 	}
 
-	location, path, text = resolveNuspecLicense("file", "LICENSE.txt", "", dir, nil)
+	location, path, text, err = resolveNuspecLicense("file", "LICENSE.txt", "", dir, nil, ArtifactReadLimits{})
+	if err != nil {
+		t.Fatalf("resolveNuspecLicense file: %v", err)
+	}
 	if location != "LICENSE.txt" || path != "LICENSE.txt" || text != "directory license" {
 		t.Fatalf("directory file license = %q %q %q", location, path, text)
 	}
@@ -583,12 +612,18 @@ func TestResolveNuspecLicenseHelperBranches(t *testing.T) {
 		t.Fatalf("zip reader: %v", err)
 	}
 
-	location, path, text = resolveNuspecLicense("file", "LICENSE.txt", "https://licenses.example/file", "", zipReader)
+	location, path, text, err = resolveNuspecLicense("file", "LICENSE.txt", "https://licenses.example/file", "", zipReader, ArtifactReadLimits{})
+	if err != nil {
+		t.Fatalf("resolveNuspecLicense zip file: %v", err)
+	}
 	if location != "LICENSE.txt" || path != "LICENSE.txt" || text != "zip license" {
 		t.Fatalf("zip file license = %q %q %q", location, path, text)
 	}
 
-	location, path, text = resolveNuspecLicense("custom", " custom-license ", " https://licenses.example/custom ", dir, nil)
+	location, path, text, err = resolveNuspecLicense("custom", " custom-license ", " https://licenses.example/custom ", dir, nil, ArtifactReadLimits{})
+	if err != nil {
+		t.Fatalf("resolveNuspecLicense default: %v", err)
+	}
 	if location != "custom-license" || path != "" || text != "" {
 		t.Fatalf("default license = %q %q %q", location, path, text)
 	}
@@ -605,7 +640,9 @@ func TestNugetZipHelperBranches(t *testing.T) {
 		t.Fatalf("zip reader: %v", err)
 	}
 
-	if got := readEmbeddedLicenseFromZip(zipReader, "/docs/LICENSE.txt"); got != "zip license" {
+	if got, err := readEmbeddedLicenseFromZip(zipReader, "/docs/LICENSE.txt", DefaultMaxEmbeddedLicenseBytes); err != nil {
+		t.Fatalf("readEmbeddedLicenseFromZip: %v", err)
+	} else if got != "zip license" {
 		t.Fatalf("readEmbeddedLicenseFromZip = %q", got)
 	}
 	for _, licensePath := range []string{"../LICENSE.txt", "C:/LICENSE.txt", `\\server\share\LICENSE.txt`} {
@@ -613,16 +650,18 @@ func TestNugetZipHelperBranches(t *testing.T) {
 			t.Fatalf("normalizeEmbeddedLicensePath(%q) = %q", licensePath, got)
 		}
 	}
-	if got := readEmbeddedLicenseFromZip(zipReader, "missing.txt"); got != "" {
+	if got, err := readEmbeddedLicenseFromZip(zipReader, "missing.txt", DefaultMaxEmbeddedLicenseBytes); err != nil {
+		t.Fatalf("readEmbeddedLicenseFromZip: %v", err)
+	} else if got != "" {
 		t.Fatalf("expected missing zip license to be empty, got %q", got)
 	}
 
-	if payload, err := readZipFile(zipReader.File[0]); err != nil || string(payload) != "zip license" {
+	if payload, err := readZipFile(zipReader.File[0], DefaultMaxEmbeddedLicenseBytes); err != nil || string(payload) != "zip license" {
 		t.Fatalf("readZipFile = %q %v", string(payload), err)
 	}
 
 	zipReader.File[0].Method = 99
-	if _, err := readZipFile(zipReader.File[0]); err == nil {
+	if _, err := readZipFile(zipReader.File[0], DefaultMaxEmbeddedLicenseBytes); err == nil {
 		t.Fatal("expected unsupported compression method error")
 	}
 }
@@ -749,5 +788,104 @@ func TestNugetResolverResolvePrefersGlobalPackagesOverRegistration(t *testing.T)
 	}
 	if got.ArtifactResolution == nil || got.ArtifactResolution.Kind != "local-package-manager" || got.ArtifactResolution.Detail != "nuget-global-packages" {
 		t.Fatalf("artifact resolution = %#v", got.ArtifactResolution)
+	}
+}
+
+func TestNugetResolverGlobalPackagesRejectsOversizedNuspec(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	packageDir := filepath.Join(root, "oversized.package", "1.0.0")
+	if err := os.MkdirAll(packageDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	nuspec := `<?xml version="1.0" encoding="utf-8"?>
+<package><metadata><license type="expression">MIT</license></metadata></package>`
+	if err := os.WriteFile(filepath.Join(packageDir, "oversized.package.nuspec"), []byte(nuspec), 0o644); err != nil {
+		t.Fatalf("write nuspec: %v", err)
+	}
+
+	_, ok, err := (&nugetResolver{
+		globalPackagesRoot: root,
+		artifactReadLimits: ArtifactReadLimits{MaxPackageMetadataBytes: 8},
+	}).resolveFromGlobalPackages("Oversized.Package", "1.0.0")
+	if ok {
+		t.Fatal("expected oversized nuspec lookup to fail")
+	}
+	var safetyErr *ArtifactSafetyError
+	if !errors.As(err, &safetyErr) {
+		t.Fatalf("expected ArtifactSafetyError, got %T: %v", err, err)
+	}
+}
+
+func TestNugetResolverRegistrationRejectsOversizedPackageContentAndArchiveEntryCount(t *testing.T) {
+	t.Parallel()
+
+	archive := buildTestNugetArchive(t, map[string]string{
+		"Sample.Package.nuspec": `<?xml version="1.0" encoding="utf-8"?>
+<package><metadata><license type="file">LICENSE.txt</license></metadata></package>`,
+		"LICENSE.txt": "archive embedded license",
+		"extra.txt":   "x",
+	})
+
+	var server *httptest.Server
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/sample.package/1.0.0.json":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"catalogEntry":"` + server.URL + `/catalog/sample.package.1.0.0.json","packageContent":"` + server.URL + `/package/sample.package.1.0.0.nupkg"}`))
+		case "/catalog/sample.package.1.0.0.json":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"authors":"Sample Author","published":"2024-02-03T00:00:00Z"}`))
+		case "/package/sample.package.1.0.0.nupkg":
+			w.Header().Set("Content-Type", "application/octet-stream")
+			w.Header().Set("Content-Length", "999")
+			_, _ = w.Write(archive)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	resolver := &nugetResolver{
+		client:              server.Client(),
+		registrationBaseURL: server.URL,
+		artifactReadLimits:  ArtifactReadLimits{MaxPackageArtifactBytes: 32, MaxPackageArchiveEntries: 2},
+	}
+
+	_, ok, err := resolver.resolveFromRegistration("Sample.Package", "1.0.0")
+	if ok {
+		t.Fatal("expected oversized package artifact to fail")
+	}
+	var safetyErr *ArtifactSafetyError
+	if !errors.As(err, &safetyErr) {
+		t.Fatalf("expected ArtifactSafetyError, got %T: %v", err, err)
+	}
+
+	resolver.artifactReadLimits = ArtifactReadLimits{
+		MaxPackageArtifactBytes:  int64(len(archive) + 16),
+		MaxPackageArchiveEntries: 2,
+	}
+	_, ok, err = resolver.resolveFromRegistration("Sample.Package", "1.0.0")
+	if ok {
+		t.Fatal("expected excessive archive entry count to fail")
+	}
+	if !errors.As(err, &safetyErr) {
+		t.Fatalf("expected ArtifactSafetyError, got %T: %v", err, err)
+	}
+}
+
+func TestReadZipFileRejectsOversizedEntry(t *testing.T) {
+	t.Parallel()
+
+	archive := buildTestNugetArchive(t, map[string]string{
+		"LICENSE.txt": "12345",
+	})
+	zipReader, err := zip.NewReader(bytes.NewReader(archive), int64(len(archive)))
+	if err != nil {
+		t.Fatalf("zip reader: %v", err)
+	}
+	if _, err := readZipFile(zipReader.File[0], 4); err == nil {
+		t.Fatal("expected oversized zip entry error")
 	}
 }

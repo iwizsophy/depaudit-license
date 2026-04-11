@@ -23,7 +23,7 @@ func (r *nodeResolver) resolve(packageName string, version string, projectDir st
 		return cached
 	}
 
-	if local, ok := r.resolveFromInstalledPackage(packageName, version, projectDir); ok {
+	if local, ok, err := r.resolveFromInstalledPackage(packageName, version, projectDir); err == nil && ok {
 		r.cache[cacheKey] = local
 		return local
 	}

@@ -447,6 +447,85 @@ func TestNormalizeConfigDefaultsDirAndMode(t *testing.T) {
 	}
 }
 
+func TestWrapClientNilClientAndUnsupportedRequestsBypassCache(t *testing.T) {
+	t.Parallel()
+
+	client := WrapClient(nil, Config{Mode: ModeUse, Dir: t.TempDir(), TTL: time.Hour})
+	if client == nil || client.Transport == nil {
+		t.Fatalf("wrapped client = %#v", client)
+	}
+
+	if info, ok, err := cacheableRequestInfo(nil); err != nil || ok || info.method != "" {
+		t.Fatalf("nil request info = %#v %v %v", info, ok, err)
+	}
+
+	req, err := http.NewRequest(http.MethodPut, "https://example.test/pkg/react", nil)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	if _, ok, err := cacheableRequestInfo(req); err != nil || ok {
+		t.Fatalf("put request should bypass cache: %v %v", ok, err)
+	}
+
+	req, err = http.NewRequest(http.MethodGet, "ftp://example.test/pkg/react", nil)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	if _, ok, err := cacheableRequestInfo(req); err != nil || ok {
+		t.Fatalf("ftp request should bypass cache: %v %v", ok, err)
+	}
+
+	req = &http.Request{Method: http.MethodGet}
+	if _, ok, err := cacheableRequestInfo(req); err != nil || ok {
+		t.Fatalf("nil URL request should bypass cache: %v %v", ok, err)
+	}
+}
+
+func TestReadRequestBodyAndCacheHelpersHandleErrorPaths(t *testing.T) {
+	t.Parallel()
+
+	req, err := http.NewRequest(http.MethodPost, "https://example.test/query", bytes.NewBufferString(`{"q":1}`))
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.GetBody = func() (io.ReadCloser, error) {
+		return io.NopCloser(bytes.NewBufferString(`{"q":1}`)), nil
+	}
+	body, err := readRequestBody(req)
+	if err != nil || string(body) != `{"q":1}` {
+		t.Fatalf("getbody request body = %q %v", string(body), err)
+	}
+
+	req, err = http.NewRequest(http.MethodPost, "https://example.test/query", nil)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Body = io.NopCloser(bytes.NewBuffer(nil))
+	req.GetBody = func() (io.ReadCloser, error) {
+		return nil, errors.New("boom")
+	}
+	if _, err := readRequestBody(req); err == nil {
+		t.Fatal("expected getbody error")
+	}
+
+	path := filepath.Join(t.TempDir(), "broken.json")
+	if err := os.WriteFile(path, []byte("{not-json"), 0o644); err != nil {
+		t.Fatalf("write broken cache: %v", err)
+	}
+	if _, err := readCache(path); err == nil {
+		t.Fatal("expected invalid cache json error")
+	}
+
+	if _, err := responseFromCache(cachedResponse{BodyBase64: "%%%invalid%%%"}, req); err == nil {
+		t.Fatal("expected invalid base64 error")
+	}
+	if !isExpired(cachedResponse{StoredAt: "not-a-time"}, time.Hour) {
+		t.Fatal("expected invalid timestamp to be expired")
+	}
+
+	writeWarning(nil, "ignored %s", "warning")
+}
+
 func base64String(value string) string {
 	return base64.StdEncoding.EncodeToString([]byte(value))
 }

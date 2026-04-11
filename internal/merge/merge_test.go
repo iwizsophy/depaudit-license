@@ -186,6 +186,64 @@ func TestDocumentsPreserveIncomingArtifactResolutionWhenBaseLacksIt(t *testing.T
 	}
 }
 
+func TestMergeArtifactResolutionBranches(t *testing.T) {
+	t.Parallel()
+
+	if got := mergeArtifactResolution(nil, nil); got != nil {
+		t.Fatalf("nil merge = %#v", got)
+	}
+
+	incoming := &inventory.ArtifactResolution{
+		Kind:           "remote-metadata",
+		Detail:         "npm-registry-version",
+		ReviewRequired: true,
+	}
+	got := mergeArtifactResolution(nil, incoming)
+	if got == nil || got.Kind != incoming.Kind || got == incoming {
+		t.Fatalf("incoming-only merge = %#v", got)
+	}
+
+	base := &inventory.ArtifactResolution{
+		Kind:   "local-package-manager",
+		Detail: "node-modules",
+	}
+	got = mergeArtifactResolution(base, incoming)
+	if got == nil || got.Kind != "local-package-manager" {
+		t.Fatalf("local should win = %#v", got)
+	}
+
+	got = mergeArtifactResolution(
+		&inventory.ArtifactResolution{Kind: "remote-metadata", Detail: "registry-a", ReviewRequired: true},
+		&inventory.ArtifactResolution{Kind: "remote-metadata", Detail: "registry-b"},
+	)
+	if got == nil || got.Detail != "registry-b" || got.ReviewRequired {
+		t.Fatalf("non-review should win on tie = %#v", got)
+	}
+
+	got = mergeArtifactResolution(
+		&inventory.ArtifactResolution{Kind: "remote-package-content", ReviewRequired: true},
+		&inventory.ArtifactResolution{Kind: "remote-package-content", Detail: "nuget-package-content", ReviewRequired: true},
+	)
+	if got == nil || got.Detail != "nuget-package-content" {
+		t.Fatalf("detail should fill tie = %#v", got)
+	}
+
+	got = mergeArtifactResolution(
+		&inventory.ArtifactResolution{Kind: "remote-package-content", Detail: "nuget-package-content", ReviewRequired: true},
+		&inventory.ArtifactResolution{Kind: "remote-package-content", Detail: "nuget-package-content", ReviewRequired: true, ReviewReason: "local-package-manager-artifact-not-available"},
+	)
+	if got == nil || got.ReviewReason != "local-package-manager-artifact-not-available" {
+		t.Fatalf("review reason should fill tie = %#v", got)
+	}
+
+	if rank := artifactResolutionRank(&inventory.ArtifactResolution{Kind: "custom"}); rank != 0 {
+		t.Fatalf("unexpected custom rank = %d", rank)
+	}
+	if rank := artifactResolutionRank(nil); rank != -1 {
+		t.Fatalf("unexpected nil rank = %d", rank)
+	}
+}
+
 func TestMergeMetadataSourceHelperBranches(t *testing.T) {
 	t.Parallel()
 

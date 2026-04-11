@@ -219,6 +219,65 @@ Remote catalog behavior:
 - `-remote-catalog-mode stale-fallback`
 - `-remote-catalog-cache-dir <path>`
 
+External metadata / vulnerability API behavior:
+
+- `-http-cache-mode off|use|refresh|cache-only`
+- `-http-cache-dir <path>`
+- `-http-cache-ttl 24h`
+- `-npm-registry-base-url <url>`
+- `-nuget-registration-base-url <url>`
+- `-osv-base-url <url>`
+- `-github-advisory-base-url <url>`
+- `-github-advisory-token <token>`
+- `-nvd-base-url <url>`
+- `-nvd-api-key <key>`
+
+`-http-cache-*` applies to package metadata enrichment and vulnerability APIs. Remote license catalog URLs continue to use `-remote-catalog-mode` / `-remote-catalog-cache-dir` so stale-fallback behavior remains catalog-specific.
+
+The selected external metadata and vulnerability endpoints are also recorded in report JSON and vulnerability JSON as `provenance.externalSources`. Remote license catalog URLs continue to appear in `provenance.catalogSources`.
+
+Recommended patterns:
+
+- use `-http-cache-mode use -http-cache-ttl 24h` for normal CI or local runs
+- use `-http-cache-mode cache-only -http-cache-ttl 0` when repeatedly adjusting output presentation and you want to avoid new external requests
+- use `-http-cache-mode refresh` when you need to repopulate cache from upstream APIs
+- use `-http-cache-mode off` when cache must be bypassed completely
+
+## External network access
+
+This CLI can access external services when metadata enrichment, remote catalogs, or vulnerability reporting are enabled.
+
+- npm metadata enrichment:
+  default `https://registry.npmjs.org`
+  override `-npm-registry-base-url`
+- NuGet metadata enrichment:
+  default `https://api.nuget.org/v3/registration5-gz-semver2`
+  package archive fallback uses the `packageContent` URL returned by the selected registration service
+  override `-nuget-registration-base-url`
+- Remote license catalogs:
+  any `http://` or `https://` URL passed to `-license-catalog`
+  cache controls: `-remote-catalog-mode`, `-remote-catalog-cache-dir`
+- OSV vulnerability queries:
+  default `https://api.osv.dev`
+  override `-osv-base-url`
+- GitHub Advisory queries:
+  default `https://api.github.com`
+  override `-github-advisory-base-url`
+  auth: `-github-advisory-token` or `DEPAUDIT_LICENSE_GITHUB_ADVISORY_TOKEN`, `GITHUB_TOKEN`, `GH_TOKEN`
+- NVD vulnerability enrichment:
+  default `https://services.nvd.nist.gov`
+  override `-nvd-base-url`
+  auth: `-nvd-api-key` or `DEPAUDIT_LICENSE_NVD_API_KEY`, `NVD_API_KEY`
+
+Rate-limit notes:
+
+- GitHub raises REST API limits when authenticated
+- NVD raises API limits when an API key is provided
+- OSV does not currently require authentication
+- npm registry and NuGet public-read metadata requests are better handled through cache or an internal mirror/proxy than through per-request credentials
+
+When endpoint overrides are used, the selected mirror or proxy becomes part of the tool's evidence path and should be managed as an operational dependency.
+
 ## Exclude policies
 
 `depaudit-license` supports two different exclusion layers.
@@ -309,6 +368,7 @@ Public OSS releases start at `1.0.0`.
 
 - This is an independent OSS tool for license inventory, notice generation, and supplemental vulnerability reporting.
 - It is not affiliated with OSV, GitHub Advisory Database, NVD, SPDX, or the CycloneDX project.
+- It can access external package metadata, license catalog, and vulnerability APIs depending on the selected inputs and flags.
 - It is intended to assist and streamline license inventory, notice generation, and review workflows, not to conclusively resolve licensing issues.
 - It does not provide legal advice, legal opinions, or a guarantee of license compliance.
 - License classification, metadata enrichment, and generated notice outputs can be incomplete, outdated, or incorrect depending on upstream package metadata and available evidence.

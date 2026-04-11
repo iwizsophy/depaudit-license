@@ -50,6 +50,8 @@ type nugetNuspec struct {
 	} `xml:"metadata"`
 }
 
+const DefaultNuGetRegistrationBaseURL = "https://api.nuget.org/v3/registration5-gz-semver2"
+
 func (r *nugetResolver) resolve(packageName string, version string) metadata {
 	cacheKey := makeNugetPackageKey(strings.ToLower(packageName), strings.ToLower(strings.TrimSpace(version)))
 	if cached, ok := r.cache[cacheKey]; ok {
@@ -224,7 +226,7 @@ func (r *nugetResolver) resolveRegistrationBaseURL() string {
 	if strings.TrimSpace(r.registrationBaseURL) != "" {
 		return r.registrationBaseURL
 	}
-	return "https://api.nuget.org/v3/registration5-gz-semver2"
+	return DefaultNuGetRegistrationBaseURL
 }
 
 func resolveNuspecLicense(kind string, value string, licenseURL string, packageDir string, zipFile *zip.Reader) (string, string, string) {

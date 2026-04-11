@@ -219,6 +219,65 @@ remote catalog の挙動:
 - `-remote-catalog-mode stale-fallback`
 - `-remote-catalog-cache-dir <path>`
 
+外部 metadata / vulnerability API の挙動:
+
+- `-http-cache-mode off|use|refresh|cache-only`
+- `-http-cache-dir <path>`
+- `-http-cache-ttl 24h`
+- `-npm-registry-base-url <url>`
+- `-nuget-registration-base-url <url>`
+- `-osv-base-url <url>`
+- `-github-advisory-base-url <url>`
+- `-github-advisory-token <token>`
+- `-nvd-base-url <url>`
+- `-nvd-api-key <key>`
+
+`-http-cache-*` は package metadata enrichment と vulnerability API に適用されます。remote license catalog URL については、引き続き `-remote-catalog-mode` / `-remote-catalog-cache-dir` を使い、stale-fallback は catalog 専用挙動として扱います。
+
+選択された external metadata / vulnerability endpoint は、report JSON と vulnerability JSON の `provenance.externalSources` にも記録されます。remote license catalog URL は引き続き `provenance.catalogSources` に出力されます。
+
+推奨パターン:
+
+- 通常の CI / local run では `-http-cache-mode use -http-cache-ttl 24h`
+- 表示調整などで繰り返し実行し、新しい外部リクエストを避けたい場合は `-http-cache-mode cache-only -http-cache-ttl 0`
+- upstream API から強制的に再取得して cache を更新したい場合は `-http-cache-mode refresh`
+- cache を完全に使わない場合は `-http-cache-mode off`
+
+## 外部ネットワークアクセス
+
+metadata enrichment、remote catalog、vulnerability reporting を使う場合、この CLI は外部 service へアクセスすることがあります。
+
+- npm metadata enrichment:
+  既定 `https://registry.npmjs.org`
+  上書き `-npm-registry-base-url`
+- NuGet metadata enrichment:
+  既定 `https://api.nuget.org/v3/registration5-gz-semver2`
+  package archive fallback は、選択された registration service が返す `packageContent` URL を使います
+  上書き `-nuget-registration-base-url`
+- remote license catalog:
+  `-license-catalog` に渡した任意の `http://` / `https://` URL
+  cache 制御は `-remote-catalog-mode`, `-remote-catalog-cache-dir`
+- OSV vulnerability query:
+  既定 `https://api.osv.dev`
+  上書き `-osv-base-url`
+- GitHub Advisory query:
+  既定 `https://api.github.com`
+  上書き `-github-advisory-base-url`
+  認証: `-github-advisory-token` または `DEPAUDIT_LICENSE_GITHUB_ADVISORY_TOKEN`, `GITHUB_TOKEN`, `GH_TOKEN`
+- NVD vulnerability enrichment:
+  既定 `https://services.nvd.nist.gov`
+  上書き `-nvd-base-url`
+  認証: `-nvd-api-key` または `DEPAUDIT_LICENSE_NVD_API_KEY`, `NVD_API_KEY`
+
+rate limit に関する補足:
+
+- GitHub は認証付きで REST API の上限が緩和されます
+- NVD は API key ありで利用上限が引き上がります
+- OSV は現時点で認証を要求しません
+- npm registry と NuGet の public-read metadata は、個別 credential より cache や社内 mirror / proxy で吸収する前提が現実的です
+
+endpoint override を使う場合、選択した mirror / proxy 自体が evidence path の一部になるため、運用上の依存先として管理してください。
+
 ## 除外ポリシー
 
 `depaudit-license` には、役割の異なる 2 層の除外があります。
@@ -305,6 +364,7 @@ remote catalog の挙動:
 
 - このツールは、ライセンス inventory、notice 生成、補助的な vulnerability reporting のための独立した OSS です
 - OSV、GitHub Advisory Database、NVD、SPDX、CycloneDX project とは提携していません
+- 入力と flag に応じて、外部の package metadata、license catalog、vulnerability API にアクセスすることがあります
 - ライセンス inventory、notice 生成、review workflow の容易化を目的とした支援ツールであり、ライセンス上の問題を最終的に解決または確定するものではありません
 - 法的助言、法的見解、またはライセンス適合性の保証を提供するものではありません
 - license classification、metadata enrichment、生成される notice 出力は、upstream package metadata や取得できる evidence に依存しており、不完全、古い、または誤っている可能性があります

@@ -10,6 +10,8 @@ import (
 	"time"
 )
 
+const DefaultNodeRegistryBaseURL = "https://registry.npmjs.org"
+
 var now = time.Now
 
 func (r *nodeResolver) resolve(packageName string, version string, projectDir string) metadata {
@@ -39,7 +41,7 @@ func (r *nodeResolver) resolve(packageName string, version string, projectDir st
 		return meta
 	}
 
-	endpoint := strings.TrimRight(firstNonEmpty(r.registryBaseURL, "https://registry.npmjs.org"), "/") +
+	endpoint := strings.TrimRight(firstNonEmpty(r.registryBaseURL, DefaultNodeRegistryBaseURL), "/") +
 		"/" + url.PathEscape(packageName) + "/" + url.PathEscape(version)
 	body, err := requestJSON(r.client, endpoint)
 	if err != nil {

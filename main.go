@@ -14,10 +14,14 @@ import (
 
 	"depaudit-license/internal/catalog"
 	"depaudit-license/internal/enrich"
+	"depaudit-license/internal/externalaccess"
+	"depaudit-license/internal/httpcache"
 	"depaudit-license/internal/input"
+	"depaudit-license/internal/inventory"
 	"depaudit-license/internal/licenseoverride"
 	"depaudit-license/internal/policy"
 	"depaudit-license/internal/report"
+	"depaudit-license/internal/scan"
 	"depaudit-license/internal/vuln"
 )
 
@@ -38,15 +42,22 @@ type config struct {
 	licenseOverride       licenseoverride.File
 	remoteCatalogMode     string
 	remoteCatalogCacheDir string
+	httpCacheMode         string
+	httpCacheDir          string
+	httpCacheTTL          time.Duration
 	templatePath          string
 	themeCSSPath          string
 	legalTemplatePath     string
 	legalThemeCSSPath     string
 	vulnTemplatePath      string
 	vulnThemeCSSPath      string
+	npmRegistryBaseURL    string
+	nugetRegistrationURL  string
 	osvBaseURL            string
 	gitHubAdvisoryBaseURL string
+	gitHubAdvisoryToken   string
 	nvdBaseURL            string
+	nvdAPIKey             string
 	excludePatterns       []string
 	timeout               time.Duration
 }
@@ -72,7 +83,11 @@ func run(args []string, stdout io.Writer) error {
 		return err
 	}
 
-	client := &http.Client{Timeout: cfg.timeout}
+	baseClient := &http.Client{Timeout: cfg.timeout}
+	cachedClient, err := buildHTTPClient(baseClient, cfg)
+	if err != nil {
+		return err
+	}
 
 	licenseCatalogSources, err := resolveCatalogSources(cfg.licenseCatalogs)
 	if err != nil {
@@ -113,7 +128,7 @@ func run(args []string, stdout io.Writer) error {
 	}
 
 	loadResult, err := catalog.LoadSourcesWithOptions(catalog.LoadOptions{
-		Client:            client,
+		Client:            baseClient,
 		RemoteCatalogMode: cfg.remoteCatalogMode,
 		CacheDir:          cfg.remoteCatalogCacheDir,
 	}, licenseCatalogSources...)
@@ -142,7 +157,7 @@ func run(args []string, stdout io.Writer) error {
 
 	inputResult, err := input.Load(input.LoadConfig{
 		Sources:       cfg.inputs,
-		Client:        client,
+		Client:        baseClient,
 		Catalog:       cat,
 		SubgraphRules: cfg.excludePolicy.SubgraphExcludes,
 	})
@@ -150,9 +165,11 @@ func run(args []string, stdout io.Writer) error {
 		return err
 	}
 	inputResult.Document, err = enrich.Apply(enrich.Config{
-		Client:          client,
-		Catalog:         cat,
-		RepositoryRoots: repositoryScanRoots(cfg.inputs),
+		Client:                   cachedClient,
+		Catalog:                  cat,
+		RepositoryRoots:          repositoryScanRoots(cfg.inputs),
+		NodeRegistryBaseURL:      cfg.npmRegistryBaseURL,
+		NuGetRegistrationBaseURL: cfg.nugetRegistrationURL,
 	}, inputResult.Document)
 	if err != nil {
 		return err
@@ -199,6 +216,7 @@ func run(args []string, stdout io.Writer) error {
 	output := report.BuildOutput(view, report.OutputConfig{
 		InputKind:        inputResult.InputKind,
 		CatalogSources:   loadResult.SourceMetadata,
+		ExternalSources:  buildExternalSources(inputResult.Document, cfg),
 		SelectedLocale:   textBundle.Locale,
 		EffectiveCatalog: loadResult.EffectiveCatalog,
 	})
@@ -218,10 +236,12 @@ func run(args []string, stdout io.Writer) error {
 		}
 		pipeline := vuln.RunPipeline(context.Background(), vulnInput, vuln.PipelineConfig{
 			Mode:                  cfg.vulnMode,
-			Client:                client,
+			Client:                cachedClient,
 			OSVBaseURL:            cfg.osvBaseURL,
 			GitHubAdvisoryBaseURL: cfg.gitHubAdvisoryBaseURL,
+			GitHubToken:           cfg.gitHubAdvisoryToken,
 			NVDBaseURL:            cfg.nvdBaseURL,
+			NVDAPIKey:             cfg.nvdAPIKey,
 		})
 		checklist := vuln.BuildChecklist(vulnInput, pipeline)
 		if strings.TrimSpace(cfg.outputVulnHTML) != "" {
@@ -235,7 +255,7 @@ func run(args []string, stdout io.Writer) error {
 			fmt.Fprintf(stdout, "generated vulnerability HTML: %s\n", cfg.outputVulnHTML)
 		}
 		if strings.TrimSpace(cfg.outputVulnJSON) != "" {
-			vulnJSON, err := json.MarshalIndent(vuln.BuildChecklistOutput(vulnInput, checklist), "", "  ")
+			vulnJSON, err := json.MarshalIndent(vuln.BuildChecklistOutput(vulnInput, checklist, buildExternalSources(inputResult.Document, cfg)), "", "  ")
 			if err != nil {
 				return err
 			}
@@ -277,15 +297,22 @@ func parseFlags(args []string) (config, error) {
 	fs.StringVar(&cfg.excludePolicyPath, "exclude-policy", "", "exclude policy JSON path")
 	fs.StringVar(&cfg.remoteCatalogMode, "remote-catalog-mode", catalog.RemoteCatalogModeFailFast, "remote catalog mode: fail-fast or stale-fallback")
 	fs.StringVar(&cfg.remoteCatalogCacheDir, "remote-catalog-cache-dir", "", "remote catalog cache directory; default is the user cache directory")
+	fs.StringVar(&cfg.httpCacheMode, "http-cache-mode", httpcache.ModeUse, "HTTP cache mode: off, use, refresh, or cache-only")
+	fs.StringVar(&cfg.httpCacheDir, "http-cache-dir", "", "HTTP cache directory; default is the user cache directory")
+	fs.DurationVar(&cfg.httpCacheTTL, "http-cache-ttl", 24*time.Hour, "HTTP cache TTL (0 disables expiration)")
 	fs.StringVar(&cfg.templatePath, "template", filepath.Join("templates", "report.html.tmpl"), "HTML template path")
 	fs.StringVar(&cfg.themeCSSPath, "theme-css", filepath.Join("templates", "report.css"), "theme CSS path")
 	fs.StringVar(&cfg.legalTemplatePath, "legal-template", filepath.Join("templates", "legal_notice.html.tmpl"), "legal notice HTML template path")
 	fs.StringVar(&cfg.legalThemeCSSPath, "legal-theme-css", filepath.Join("templates", "legal_notice.css"), "legal notice CSS path")
 	fs.StringVar(&cfg.vulnTemplatePath, "vuln-template", filepath.Join("templates", "vulnerability_checklist.html.tmpl"), "vulnerability checklist HTML template path")
 	fs.StringVar(&cfg.vulnThemeCSSPath, "vuln-theme-css", filepath.Join("templates", "vulnerability_checklist.css"), "vulnerability checklist CSS path")
+	fs.StringVar(&cfg.npmRegistryBaseURL, "npm-registry-base-url", "", "npm registry metadata base URL")
+	fs.StringVar(&cfg.nugetRegistrationURL, "nuget-registration-base-url", "", "NuGet registration base URL")
 	fs.StringVar(&cfg.osvBaseURL, "osv-base-url", vuln.DefaultOSVBaseURL, "OSV API base URL")
 	fs.StringVar(&cfg.gitHubAdvisoryBaseURL, "github-advisory-base-url", vuln.DefaultGitHubAdvisoryBaseURL, "GitHub Advisory API base URL")
+	fs.StringVar(&cfg.gitHubAdvisoryToken, "github-advisory-token", "", "GitHub Advisory API token; env fallback: DEPAUDIT_LICENSE_GITHUB_ADVISORY_TOKEN, GITHUB_TOKEN, GH_TOKEN")
 	fs.StringVar(&cfg.nvdBaseURL, "nvd-base-url", vuln.DefaultNVDBaseURL, "NVD API base URL")
+	fs.StringVar(&cfg.nvdAPIKey, "nvd-api-key", "", "NVD API key; env fallback: DEPAUDIT_LICENSE_NVD_API_KEY or NVD_API_KEY")
 	fs.StringVar(&excludePatterns, "exclude-patterns", "", "comma-separated package name fragments to exclude from production notices")
 	fs.IntVar(&timeoutSeconds, "timeout-seconds", 15, "HTTP timeout in seconds")
 	if err := fs.Parse(args); err != nil {
@@ -338,6 +365,17 @@ func parseFlags(args []string) (config, error) {
 	if vulnerabilityOutputsEnabled(cfg) && strings.TrimSpace(cfg.vulnMode) == vuln.ModeDisabled {
 		cfg.vulnMode = vuln.ModeOSVOnly
 	}
+	cfg.gitHubAdvisoryToken = firstNonEmptyString(
+		cfg.gitHubAdvisoryToken,
+		strings.TrimSpace(os.Getenv("DEPAUDIT_LICENSE_GITHUB_ADVISORY_TOKEN")),
+		strings.TrimSpace(os.Getenv("GITHUB_TOKEN")),
+		strings.TrimSpace(os.Getenv("GH_TOKEN")),
+	)
+	cfg.nvdAPIKey = firstNonEmptyString(
+		cfg.nvdAPIKey,
+		strings.TrimSpace(os.Getenv("DEPAUDIT_LICENSE_NVD_API_KEY")),
+		strings.TrimSpace(os.Getenv("NVD_API_KEY")),
+	)
 	cfg.timeout = time.Duration(timeoutSeconds) * time.Second
 	if err := validateConfig(cfg); err != nil {
 		return config{}, err
@@ -359,6 +397,16 @@ func splitPatterns(raw string) []string {
 		}
 	}
 	return result
+}
+
+func firstNonEmptyString(values ...string) string {
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 func resolveAssetPath(pathValue string) (string, error) {
@@ -470,7 +518,86 @@ func validateConfig(cfg config) error {
 	if strings.TrimSpace(cfg.vulnMode) != "" && strings.TrimSpace(cfg.vulnMode) != vuln.ModeDisabled && !vulnerabilityOutputsEnabled(cfg) {
 		return fmt.Errorf("vulnerability outputs must be configured when -vuln-mode is enabled")
 	}
+	if err := httpcache.ValidateConfig(httpcache.Config{
+		Mode: cfg.httpCacheMode,
+		Dir:  cfg.httpCacheDir,
+		TTL:  cfg.httpCacheTTL,
+	}); err != nil {
+		return err
+	}
 	return nil
+}
+
+func buildHTTPClient(client *http.Client, cfg config) (*http.Client, error) {
+	if client == nil {
+		client = &http.Client{Timeout: cfg.timeout}
+	}
+	cacheCfg := httpcache.Config{
+		Mode:          cfg.httpCacheMode,
+		Dir:           cfg.httpCacheDir,
+		TTL:           cfg.httpCacheTTL,
+		WarningWriter: stderrOut,
+	}
+	if err := httpcache.ValidateConfig(cacheCfg); err != nil {
+		return nil, err
+	}
+	return httpcache.WrapClient(client, cacheCfg), nil
+}
+
+func buildExternalSources(doc inventory.Document, cfg config) []externalaccess.Service {
+	hasNode := false
+	hasDotNet := false
+	for _, pkg := range doc.Packages {
+		switch strings.ToLower(strings.TrimSpace(pkg.Ecosystem)) {
+		case "node":
+			hasNode = true
+		case "dotnet":
+			hasDotNet = true
+		}
+	}
+
+	cacheCfg := httpcache.NormalizeConfig(httpcache.Config{
+		Mode: cfg.httpCacheMode,
+		TTL:  cfg.httpCacheTTL,
+	})
+	cacheMode := cacheCfg.Mode
+	cacheTTL := ""
+	if cacheMode != httpcache.ModeOff {
+		cacheTTL = cacheCfg.TTL.String()
+	}
+
+	services := make([]externalaccess.Service, 0, 5)
+	add := func(id string, purpose string, baseURL string, authConfigured bool) {
+		services = append(services, externalaccess.Service{
+			ID:             id,
+			Purpose:        purpose,
+			BaseURL:        strings.TrimSpace(baseURL),
+			AuthConfigured: authConfigured,
+			CacheMode:      cacheMode,
+			CacheTTL:       cacheTTL,
+		})
+	}
+
+	if hasNode {
+		add("npm-registry", "metadata-enrichment", firstNonEmptyString(cfg.npmRegistryBaseURL, scan.DefaultNodeRegistryBaseURL), false)
+	}
+	if hasDotNet {
+		add("nuget-registration", "metadata-enrichment", firstNonEmptyString(cfg.nugetRegistrationURL, scan.DefaultNuGetRegistrationBaseURL), false)
+	}
+
+	switch strings.TrimSpace(cfg.vulnMode) {
+	case vuln.ModeOSVOnly:
+		add("osv", "vulnerability", firstNonEmptyString(cfg.osvBaseURL, vuln.DefaultOSVBaseURL), false)
+	case vuln.ModeOSVGitHub:
+		add("osv", "vulnerability", firstNonEmptyString(cfg.osvBaseURL, vuln.DefaultOSVBaseURL), false)
+		add("github-advisory", "vulnerability", firstNonEmptyString(cfg.gitHubAdvisoryBaseURL, vuln.DefaultGitHubAdvisoryBaseURL), strings.TrimSpace(cfg.gitHubAdvisoryToken) != "")
+	case vuln.ModeFull:
+		add("osv", "vulnerability", firstNonEmptyString(cfg.osvBaseURL, vuln.DefaultOSVBaseURL), false)
+		add("github-advisory", "vulnerability", firstNonEmptyString(cfg.gitHubAdvisoryBaseURL, vuln.DefaultGitHubAdvisoryBaseURL), strings.TrimSpace(cfg.gitHubAdvisoryToken) != "")
+		add("nvd", "vulnerability", firstNonEmptyString(cfg.nvdBaseURL, vuln.DefaultNVDBaseURL), strings.TrimSpace(cfg.nvdAPIKey) != "")
+	}
+
+	return externalaccess.Normalize(services)
 }
 
 func vulnerabilityOutputsEnabled(cfg config) bool {

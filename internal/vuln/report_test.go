@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"depaudit-license/internal/externalaccess"
 )
 
 func setTestNow(t *testing.T, instant time.Time) {
@@ -79,12 +81,17 @@ func TestBuildChecklistSummarizesAssessment(t *testing.T) {
 		t.Fatalf("mode = %q", checklist.Mode)
 	}
 
-	output := BuildChecklistOutput(input, checklist)
+	output := BuildChecklistOutput(input, checklist, []externalaccess.Service{
+		{ID: "osv", Purpose: "vulnerability", BaseURL: "https://api.osv.dev", CacheMode: "use", CacheTTL: "24h0m0s"},
+	})
 	if output.SchemaVersion != JSONChecklistSchemaVersion {
 		t.Fatalf("schema version = %q", output.SchemaVersion)
 	}
 	if output.Provenance.InputSchemaVersion != InputSchemaVersion {
 		t.Fatalf("input schema version = %q", output.Provenance.InputSchemaVersion)
+	}
+	if len(output.Provenance.ExternalSources) != 1 || output.Provenance.ExternalSources[0].ID != "osv" {
+		t.Fatalf("external sources = %#v", output.Provenance.ExternalSources)
 	}
 }
 
@@ -155,7 +162,7 @@ func TestBuildChecklistOutputJSONRoundTrips(t *testing.T) {
 
 	output := BuildChecklistOutput(AssessmentInput{SchemaVersion: InputSchemaVersion}, Checklist{
 		PackageFindings: []PackageFindingView{{Name: "react"}},
-	})
+	}, nil)
 	data, err := json.Marshal(output)
 	if err != nil {
 		t.Fatalf("marshal output: %v", err)
@@ -265,8 +272,14 @@ func TestBuildChecklistPreservesPackageProvenanceInOutput(t *testing.T) {
 		t.Fatalf("conflict fields = %#v", finding.ConflictFields)
 	}
 
-	output := BuildChecklistOutput(input, checklist)
+	output := BuildChecklistOutput(input, checklist, []externalaccess.Service{
+		{ID: "github-advisory", Purpose: "vulnerability", BaseURL: "https://api.github.com", AuthConfigured: true, CacheMode: "use", CacheTTL: "24h0m0s"},
+		{ID: "osv", Purpose: "vulnerability", BaseURL: "https://api.osv.dev", CacheMode: "use", CacheTTL: "24h0m0s"},
+	})
 	if !slices.Equal(output.Provenance.Sources, checklist.Sources) {
 		t.Fatalf("output provenance sources = %#v", output.Provenance.Sources)
+	}
+	if len(output.Provenance.ExternalSources) != 2 || output.Provenance.ExternalSources[0].ID != "github-advisory" {
+		t.Fatalf("external sources = %#v", output.Provenance.ExternalSources)
 	}
 }

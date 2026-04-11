@@ -4963,6 +4963,11 @@ func TestRunVulnerabilityJSONIncludesProvenance(t *testing.T) {
 		Provenance struct {
 			InputSchemaVersion string   `json:"inputSchemaVersion"`
 			Sources            []string `json:"sources"`
+			ExternalSources    []struct {
+				ID      string `json:"id"`
+				Purpose string `json:"purpose"`
+				BaseURL string `json:"baseUrl"`
+			} `json:"externalSources"`
 		} `json:"provenance"`
 	}
 	if err := json.Unmarshal(payload, &output); err != nil {
@@ -4973,6 +4978,68 @@ func TestRunVulnerabilityJSONIncludesProvenance(t *testing.T) {
 	}
 	if !slices.Equal(output.Provenance.Sources, []string{"metadata-enrichment", "osv", "repository-scan"}) {
 		t.Fatalf("sources = %#v", output.Provenance.Sources)
+	}
+	if len(output.Provenance.ExternalSources) != 3 {
+		t.Fatalf("external sources = %#v", output.Provenance.ExternalSources)
+	}
+	if output.Provenance.ExternalSources[0].ID != "npm-registry" ||
+		output.Provenance.ExternalSources[1].ID != "nuget-registration" ||
+		output.Provenance.ExternalSources[2].ID != "osv" ||
+		output.Provenance.ExternalSources[2].BaseURL != server.URL {
+		t.Fatalf("external sources = %#v", output.Provenance.ExternalSources)
+	}
+}
+
+func TestRunReportJSONIncludesExternalSourceProvenance(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	reportJSONPath := filepath.Join(dir, "report.json")
+
+	err := run([]string{
+		"-input", "repository-scan=internal/ci/testdata/repo",
+		"-output-html", filepath.Join(dir, "report.html"),
+		"-output-json", reportJSONPath,
+		"-output-legal-html", filepath.Join(dir, "legal.html"),
+		"-npm-registry-base-url", "https://npm.example.test",
+		"-nuget-registration-base-url", "https://nuget.example.test",
+		"-http-cache-mode", "use",
+		"-http-cache-ttl", "0s",
+	}, &bytes.Buffer{})
+	if err != nil {
+		t.Fatalf("run with report json output failed: %v", err)
+	}
+
+	payload, err := os.ReadFile(reportJSONPath)
+	if err != nil {
+		t.Fatalf("read report json: %v", err)
+	}
+	var output struct {
+		Provenance struct {
+			ExternalSources []struct {
+				ID        string `json:"id"`
+				Purpose   string `json:"purpose"`
+				BaseURL   string `json:"baseUrl"`
+				CacheMode string `json:"cacheMode"`
+				CacheTTL  string `json:"cacheTtl"`
+			} `json:"externalSources"`
+		} `json:"provenance"`
+	}
+	if err := json.Unmarshal(payload, &output); err != nil {
+		t.Fatalf("parse report json: %v", err)
+	}
+	if len(output.Provenance.ExternalSources) != 2 {
+		t.Fatalf("external sources = %#v", output.Provenance.ExternalSources)
+	}
+	if output.Provenance.ExternalSources[0].ID != "npm-registry" ||
+		output.Provenance.ExternalSources[0].BaseURL != "https://npm.example.test" ||
+		output.Provenance.ExternalSources[0].CacheMode != "use" {
+		t.Fatalf("first external source = %#v", output.Provenance.ExternalSources[0])
+	}
+	if output.Provenance.ExternalSources[1].ID != "nuget-registration" ||
+		output.Provenance.ExternalSources[1].BaseURL != "https://nuget.example.test" ||
+		output.Provenance.ExternalSources[1].CacheTTL != "0s" {
+		t.Fatalf("second external source = %#v", output.Provenance.ExternalSources[1])
 	}
 }
 

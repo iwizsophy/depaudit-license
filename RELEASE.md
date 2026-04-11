@@ -62,7 +62,7 @@ smoke matrix に加えて、次の最終出力契約は個別の integration tes
 `v1.3.0` では、少なくとも次の文書状態を確認してから tag を作成します。
 
 - [CHANGELOG.md](CHANGELOG.md) に `1.3.0` の section があり、review-only catalog entries と NuGet embedded file license fallback が記載されている
-- [README.md](README.md) と [README.ja.md](README.ja.md) に review-only catalog definitions の扱いと NuGet embedded file license の解決方針が記載されている
+- [README.md](README.md) と [README.ja.md](README.ja.md) に review-only catalog definitions の扱い、NuGet embedded file license の解決方針、外部ネットワークアクセス先、HTTP cache、endpoint override、API key / token 設定、`provenance.externalSources` の意味が記載されている
 - [configs/README.md](configs/README.md) に review-only catalog entries と `requires_manual_review` の使い分けが記載されている
 - release archive に含まれる `configs/` から更新済みの `licenses.json` と `license-texts.ja.json` を参照できる
 

@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"depaudit-license/internal/externalaccess"
 )
 
 var now = time.Now
@@ -59,8 +61,9 @@ type ChecklistOutput struct {
 }
 
 type ChecklistProvenance struct {
-	InputSchemaVersion string   `json:"inputSchemaVersion"`
-	Sources            []string `json:"sources"`
+	InputSchemaVersion string                   `json:"inputSchemaVersion"`
+	Sources            []string                 `json:"sources"`
+	ExternalSources    []externalaccess.Service `json:"externalSources,omitempty"`
 }
 
 type checklistHTMLView struct {
@@ -155,12 +158,13 @@ func BuildChecklist(input AssessmentInput, pipeline PipelineResult) Checklist {
 	}
 }
 
-func BuildChecklistOutput(input AssessmentInput, checklist Checklist) ChecklistOutput {
+func BuildChecklistOutput(input AssessmentInput, checklist Checklist, externalSources []externalaccess.Service) ChecklistOutput {
 	return ChecklistOutput{
 		SchemaVersion: JSONChecklistSchemaVersion,
 		Provenance: ChecklistProvenance{
 			InputSchemaVersion: input.SchemaVersion,
 			Sources:            append([]string(nil), checklist.Sources...),
+			ExternalSources:    externalaccess.Normalize(externalSources),
 		},
 		Checklist: checklist,
 	}

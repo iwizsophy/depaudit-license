@@ -14,10 +14,16 @@ No notable changes yet.
 
 - Built-in review-only catalog definitions for common source-available and proprietary-adjacent licenses, including Microsoft Software License Terms, BUSL, Elastic License 2.0, SSPL, Commons Clause, PolyForm, Functional Source License, Confluent Community License, Timescale License, and CockroachDB Community License.
 - Japanese localized explanations for the new review-only catalog entries so reports can carry short operator-facing guidance without treating those licenses as pre-approved OSS.
+- Configurable HTTP response caching for external metadata and vulnerability APIs, including `off`, `use`, `refresh`, and `cache-only` modes with TTL control.
+- Configurable endpoint overrides for npm registry and NuGet registration metadata, alongside the existing OSV / GitHub Advisory / NVD base URL settings.
+- Optional GitHub Advisory token and NVD API key settings for environments that need higher external API limits.
+- Report JSON and vulnerability JSON provenance now record the selected external metadata and vulnerability endpoints in `externalSources`.
 
 ### Changed
 
 - NuGet registration fallback now reads embedded `<license type="file">` evidence from package archives even when registration metadata also exposes `licenseUrl`, allowing review-only or file-based licenses to resolve out of `Unknown` when the package archive contains a recognizable license text.
+- README and release-facing documentation now explicitly describe external network access, cache behavior, endpoint overrides, and authentication knobs for rate-limited APIs.
+- Shared HTTP cache keys are now partitioned by auth-sensitive request headers, and cache files are written with restricted permissions so mirrored or authenticated upstreams do not bleed into each other through a shared cache entry.
 
 ## [1.2.0] - 2026-04-10
 

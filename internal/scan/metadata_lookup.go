@@ -92,6 +92,9 @@ func (s *MetadataLookupService) EnrichPackage(pkg inventory.Package) (inventory.
 }
 
 func (s *MetadataLookupService) lookupMetadata(pkg inventory.Package) (metadata, bool, error) {
+	if s.mode == MetadataLookupModeRemote && hasLocalArtifactResolution(pkg) {
+		return metadata{}, false, nil
+	}
 	switch strings.ToLower(strings.TrimSpace(pkg.Ecosystem)) {
 	case "node":
 		if s.mode != MetadataLookupModeRemote {
@@ -138,6 +141,13 @@ func (s *MetadataLookupService) lookupMetadata(pkg inventory.Package) (metadata,
 	default:
 		return metadata{}, false, nil
 	}
+}
+
+func hasLocalArtifactResolution(pkg inventory.Package) bool {
+	if pkg.Provenance.ArtifactResolution == nil {
+		return false
+	}
+	return strings.TrimSpace(pkg.Provenance.ArtifactResolution.Kind) == "local-package-manager"
 }
 
 func (s *MetadataLookupService) nodeProjectDirs(pkg inventory.Package) []string {

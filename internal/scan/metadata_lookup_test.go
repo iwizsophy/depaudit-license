@@ -425,6 +425,39 @@ func TestMetadataLookupServiceEnrichPackageUsesDotNetMetadata(t *testing.T) {
 	}
 }
 
+func TestMetadataLookupServiceRemoteModeSkipsPackagesWithLocalArtifactResolution(t *testing.T) {
+	t.Parallel()
+
+	service := mustNewMetadataLookupService(t, MetadataLookupConfig{
+		Client: &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			t.Fatalf("unexpected remote request to %s", req.URL.String())
+			return nil, nil
+		})},
+		Mode: MetadataLookupModeRemote,
+	})
+
+	pkg, source, changed, err := service.EnrichPackage(inventory.Package{
+		Ecosystem: "node",
+		Name:      "react",
+		Version:   "19.2.4",
+		Provenance: inventory.PackageProvenance{
+			ArtifactResolution: &inventory.ArtifactResolution{
+				Kind:   "local-package-manager",
+				Detail: "node-modules",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("enrich package: %v", err)
+	}
+	if changed || source != nil {
+		t.Fatalf("expected remote phase to skip package, got changed=%v source=%#v pkg=%#v", changed, source, pkg)
+	}
+	if pkg.Provenance.ArtifactResolution == nil || pkg.Provenance.ArtifactResolution.Kind != "local-package-manager" {
+		t.Fatalf("artifact resolution = %#v", pkg.Provenance.ArtifactResolution)
+	}
+}
+
 func TestMetadataLookupServiceEnrichPackageResolvesNodeLicenseFileText(t *testing.T) {
 	t.Parallel()
 

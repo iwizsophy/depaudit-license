@@ -61,14 +61,16 @@ func extractRuntimeConfigPath(args []string) (string, bool, error) {
 	for index := 0; index < len(args); index++ {
 		value := strings.TrimSpace(args[index])
 		switch {
-		case value == "-config":
+		case value == "-config", value == "--config":
 			if index+1 >= len(args) {
-				return "", false, fmt.Errorf("missing value for -config")
+				return "", false, fmt.Errorf("missing value for --config")
 			}
 			configPath = strings.TrimSpace(args[index+1])
 			index++
 		case strings.HasPrefix(value, "-config="):
 			configPath = strings.TrimSpace(strings.TrimPrefix(value, "-config="))
+		case strings.HasPrefix(value, "--config="):
+			configPath = strings.TrimSpace(strings.TrimPrefix(value, "--config="))
 		}
 	}
 	if strings.TrimSpace(configPath) == "" {

@@ -57,6 +57,23 @@ func TestLoadRuntimeConfigRejectsTrailingContent(t *testing.T) {
 	}
 }
 
+func TestLoadRuntimeConfigSupportsDoubleDashConfigFlag(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "depaudit-license.config.json")
+	if err := os.WriteFile(configPath, []byte(`{"version":"v1alpha1"}`), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	if _, _, err := loadRuntimeConfig([]string{"--config", configPath}); err != nil {
+		t.Fatalf("load runtime config with --config: %v", err)
+	}
+	if _, _, err := loadRuntimeConfig([]string{"--config=" + configPath}); err != nil {
+		t.Fatalf("load runtime config with --config=: %v", err)
+	}
+}
+
 func TestDefaultRuntimeConfigUsesSharedDefaultConstants(t *testing.T) {
 	t.Parallel()
 

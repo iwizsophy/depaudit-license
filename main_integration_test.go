@@ -145,7 +145,8 @@ func TestRunCopiesEmbeddedLicenseFiles(t *testing.T) {
 func TestRunStdoutAnnouncesGeneratedOutputs(t *testing.T) {
 	t.Parallel()
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	var server *httptest.Server
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/querybatch" {
 			t.Fatalf("unexpected path %s", r.URL.Path)
 		}
@@ -175,7 +176,8 @@ func TestRunStdoutAnnouncesGeneratedOutputs(t *testing.T) {
 func TestRunStdoutAnnouncesFullOutputs(t *testing.T) {
 	t.Parallel()
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	var server *httptest.Server
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/v1/querybatch":
 			w.Header().Set("Content-Type", "application/json")
@@ -5328,6 +5330,315 @@ func TestRunFullVulnerabilityStaysConsistentAcrossJSONAndHTML(t *testing.T) {
 		if !strings.Contains(html, want) {
 			t.Fatalf("vulnerability html missing %q\n%s", want, html)
 		}
+	}
+}
+
+func TestRunMultiSourcePrefersLocalArtifactResolutionOverRemoteReview(t *testing.T) {
+	dir := t.TempDir()
+	repoDir := filepath.Join(dir, "repo")
+	packageDir := filepath.Join(repoDir, "node_modules", "react")
+	if err := os.MkdirAll(packageDir, 0o755); err != nil {
+		t.Fatalf("mkdir package dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(repoDir, "package.json"), []byte(`{
+  "name": "client",
+  "dependencies": {
+    "react": "18.2.0"
+  }
+}`), 0o644); err != nil {
+		t.Fatalf("write repo package.json: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(packageDir, "package.json"), []byte(`{
+  "name": "react",
+  "version": "18.2.0",
+  "license": "MIT",
+  "homepage": "https://react.dev/",
+  "repository": { "url": "https://github.com/facebook/react" },
+  "author": { "name": "Meta" }
+}`), 0o644); err != nil {
+		t.Fatalf("write dependency package.json: %v", err)
+	}
+
+	sbomPath := filepath.Join(dir, "app.cdx.json")
+	testutil.WriteIndentedJSONFixture(t, sbomPath, map[string]any{
+		"bomFormat":   "CycloneDX",
+		"specVersion": "1.5",
+		"version":     1,
+		"metadata": map[string]any{
+			"component": map[string]any{
+				"type":    "application",
+				"name":    "client",
+				"version": "1.0.0",
+				"bom-ref": "root-app",
+			},
+		},
+		"components": []map[string]any{
+			{
+				"bom-ref": "pkg:npm/react@18.2.0",
+				"type":    "library",
+				"name":    "react",
+				"version": "18.2.0",
+				"purl":    "pkg:npm/react@18.2.0",
+			},
+		},
+		"dependencies": []map[string]any{
+			{
+				"ref":       "root-app",
+				"dependsOn": []string{"pkg:npm/react@18.2.0"},
+			},
+		},
+	})
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/react/18.2.0" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+  "license": "MIT",
+  "homepage": "https://registry.example.test/react",
+  "repository": { "url": "https://registry.example.test/react.git" },
+  "author": { "name": "Registry Author" }
+}`))
+	}))
+	defer server.Close()
+
+	reportJSONPath := filepath.Join(dir, "report.json")
+	oldStderr := stderrOut
+	var stderr bytes.Buffer
+	stderrOut = &stderr
+	t.Cleanup(func() {
+		stderrOut = oldStderr
+	})
+	if err := run([]string{
+		"-input", "repository-scan=" + repoDir,
+		"-input", "cyclonedx-json=" + sbomPath,
+		"-output-html", filepath.Join(dir, "report.html"),
+		"-output-json", reportJSONPath,
+		"-output-legal-html", filepath.Join(dir, "legal.html"),
+		"-npm-registry-base-url", server.URL,
+	}, &bytes.Buffer{}); err != nil {
+		t.Fatalf("run with local multi-source artifact evidence failed: %v", err)
+	}
+
+	payload, err := os.ReadFile(reportJSONPath)
+	if err != nil {
+		t.Fatalf("read report json: %v", err)
+	}
+	var output struct {
+		Report struct {
+			Packages []struct {
+				Name       string `json:"name"`
+				Repository string `json:"repository"`
+				Homepage   string `json:"homepage"`
+				Provenance struct {
+					SourceIDs          []string          `json:"sourceIds"`
+					ArtifactResolution struct {
+						Kind           string `json:"kind"`
+						Detail         string `json:"detail"`
+						ReviewRequired bool   `json:"reviewRequired"`
+					} `json:"artifactResolution"`
+				} `json:"provenance"`
+			} `json:"packages"`
+			Diagnostics []struct {
+				Code string `json:"code"`
+			} `json:"diagnostics"`
+		} `json:"report"`
+	}
+	if err := json.Unmarshal(payload, &output); err != nil {
+		t.Fatalf("parse report json: %v", err)
+	}
+	if len(output.Report.Packages) != 1 {
+		t.Fatalf("packages = %#v", output.Report.Packages)
+	}
+	pkg := output.Report.Packages[0]
+	if pkg.Name != "react" {
+		t.Fatalf("package = %#v", pkg)
+	}
+	if pkg.Provenance.ArtifactResolution.Kind != "local-package-manager" ||
+		pkg.Provenance.ArtifactResolution.Detail != "node-modules" ||
+		pkg.Provenance.ArtifactResolution.ReviewRequired {
+		t.Fatalf("artifact resolution = %#v", pkg.Provenance.ArtifactResolution)
+	}
+	if !slices.Equal(pkg.Provenance.SourceIDs, []string{"enrich:node-modules", "input-1", "input-2"}) {
+		t.Fatalf("source ids = %#v", pkg.Provenance.SourceIDs)
+	}
+	for _, diagnostic := range output.Report.Diagnostics {
+		if diagnostic.Code == "remote_resolution_fallback_used" {
+			t.Fatalf("unexpected remote fallback diagnostic = %#v", output.Report.Diagnostics)
+		}
+	}
+	if got := stderr.String(); strings.Contains(got, "remote resolution fallback") {
+		t.Fatalf("unexpected stderr warning = %q", got)
+	}
+}
+
+func TestRunRemoteFallbackUsesSameArtifactResolutionInReportAndVulnJSON(t *testing.T) {
+	dir := t.TempDir()
+	sbomPath := filepath.Join(dir, "app.cdx.json")
+
+	var server *httptest.Server
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/sample.package/1.2.3.json":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"catalogEntry":"` + server.URL + `/catalog/sample.package.1.2.3.json","packageContent":"` + server.URL + `/package/sample.package.1.2.3.nupkg"}`))
+		case "/catalog/sample.package.1.2.3.json":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"authors":"Sample Author","projectUrl":"https://example.test/sample","published":"2024-02-03T00:00:00Z"}`))
+		case "/package/sample.package.1.2.3.nupkg":
+			var archive bytes.Buffer
+			writer := zip.NewWriter(&archive)
+			nuspec, err := writer.Create("Sample.Package.nuspec")
+			if err != nil {
+				t.Fatalf("create nuspec: %v", err)
+			}
+			if _, err := nuspec.Write([]byte(`<?xml version="1.0" encoding="utf-8"?>
+<package>
+  <metadata>
+    <id>Sample.Package</id>
+    <version>1.2.3</version>
+    <authors>Sample Author</authors>
+    <license type="file">LICENSE.txt</license>
+  </metadata>
+</package>`)); err != nil {
+				t.Fatalf("write nuspec: %v", err)
+			}
+			licenseFile, err := writer.Create("LICENSE.txt")
+			if err != nil {
+				t.Fatalf("create license file: %v", err)
+			}
+			if _, err := licenseFile.Write([]byte("MIT License\n\nCopyright (c) 2024 Example")); err != nil {
+				t.Fatalf("write license file: %v", err)
+			}
+			if err := writer.Close(); err != nil {
+				t.Fatalf("close archive: %v", err)
+			}
+			w.Header().Set("Content-Type", "application/octet-stream")
+			_, _ = w.Write(archive.Bytes())
+		case "/v1/querybatch":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"results":[{"vulns":[]}]}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	testutil.WriteIndentedJSONFixture(t, sbomPath, map[string]any{
+		"bomFormat":   "CycloneDX",
+		"specVersion": "1.5",
+		"version":     1,
+		"metadata": map[string]any{
+			"component": map[string]any{
+				"type":    "application",
+				"name":    "app",
+				"version": "1.0.0",
+				"bom-ref": "root-app",
+			},
+		},
+		"components": []map[string]any{
+			{
+				"bom-ref": "pkg:nuget/Sample.Package@1.2.3",
+				"type":    "library",
+				"name":    "Sample.Package",
+				"version": "1.2.3",
+				"purl":    "pkg:nuget/Sample.Package@1.2.3",
+			},
+		},
+		"dependencies": []map[string]any{
+			{
+				"ref":       "root-app",
+				"dependsOn": []string{"pkg:nuget/Sample.Package@1.2.3"},
+			},
+		},
+	})
+
+	reportJSONPath := filepath.Join(dir, "report.json")
+	vulnJSONPath := filepath.Join(dir, "vuln.json")
+	if err := run([]string{
+		"-input", "cyclonedx-json=" + sbomPath,
+		"-output-html", filepath.Join(dir, "report.html"),
+		"-output-json", reportJSONPath,
+		"-output-legal-html", filepath.Join(dir, "legal.html"),
+		"-output-vuln-json", vulnJSONPath,
+		"-nuget-registration-base-url", server.URL,
+		"-osv-base-url", server.URL,
+	}, &bytes.Buffer{}); err != nil {
+		t.Fatalf("run with remote nuget fallback + vuln output failed: %v", err)
+	}
+
+	reportPayload, err := os.ReadFile(reportJSONPath)
+	if err != nil {
+		t.Fatalf("read report json: %v", err)
+	}
+	var reportOutput struct {
+		Report struct {
+			Packages []struct {
+				Name       string `json:"name"`
+				LicenseKey string `json:"licenseKey"`
+				Provenance struct {
+					ArtifactResolution struct {
+						Kind           string `json:"kind"`
+						Detail         string `json:"detail"`
+						ReviewRequired bool   `json:"reviewRequired"`
+						ReviewReason   string `json:"reviewReason"`
+					} `json:"artifactResolution"`
+				} `json:"provenance"`
+			} `json:"packages"`
+			Diagnostics []struct {
+				Code string `json:"code"`
+			} `json:"diagnostics"`
+		} `json:"report"`
+	}
+	if err := json.Unmarshal(reportPayload, &reportOutput); err != nil {
+		t.Fatalf("parse report json: %v", err)
+	}
+
+	vulnPayload, err := os.ReadFile(vulnJSONPath)
+	if err != nil {
+		t.Fatalf("read vulnerability json: %v", err)
+	}
+	var vulnOutput struct {
+		Checklist struct {
+			PackageFindings []struct {
+				Name               string `json:"name"`
+				ArtifactResolution struct {
+					Kind           string `json:"kind"`
+					Detail         string `json:"detail"`
+					ReviewRequired bool   `json:"reviewRequired"`
+					ReviewReason   string `json:"reviewReason"`
+				} `json:"artifactResolution"`
+			} `json:"packageFindings"`
+		} `json:"checklist"`
+	}
+	if err := json.Unmarshal(vulnPayload, &vulnOutput); err != nil {
+		t.Fatalf("parse vulnerability json: %v", err)
+	}
+
+	if len(reportOutput.Report.Packages) != 1 || len(vulnOutput.Checklist.PackageFindings) != 1 {
+		t.Fatalf("report packages = %#v, vuln package findings = %#v", reportOutput.Report.Packages, vulnOutput.Checklist.PackageFindings)
+	}
+	reportPkg := reportOutput.Report.Packages[0]
+	vulnPkg := vulnOutput.Checklist.PackageFindings[0]
+	if reportPkg.Name != "Sample.Package" || vulnPkg.Name != "Sample.Package" {
+		t.Fatalf("report package = %#v, vuln package = %#v", reportPkg, vulnPkg)
+	}
+	if reportPkg.LicenseKey != "MIT" {
+		t.Fatalf("report package = %#v", reportPkg)
+	}
+	if reportPkg.Provenance.ArtifactResolution != vulnPkg.ArtifactResolution {
+		t.Fatalf("artifact resolution mismatch report=%#v vuln=%#v", reportPkg.Provenance.ArtifactResolution, vulnPkg.ArtifactResolution)
+	}
+	if reportPkg.Provenance.ArtifactResolution.Kind != "remote-package-content" ||
+		reportPkg.Provenance.ArtifactResolution.Detail != "nuget-package-content" ||
+		!reportPkg.Provenance.ArtifactResolution.ReviewRequired ||
+		reportPkg.Provenance.ArtifactResolution.ReviewReason != "local-package-manager-artifact-not-available" {
+		t.Fatalf("artifact resolution = %#v", reportPkg.Provenance.ArtifactResolution)
+	}
+	if len(reportOutput.Report.Diagnostics) != 1 || reportOutput.Report.Diagnostics[0].Code != "remote_resolution_fallback_used" {
+		t.Fatalf("report diagnostics = %#v", reportOutput.Report.Diagnostics)
 	}
 }
 

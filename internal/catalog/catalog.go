@@ -395,7 +395,7 @@ func (c *Catalog) registerContains(value string, key string) {
 }
 
 func (c *Catalog) registerTextMatchers(def Definition) {
-	if def.RequiresManualReview || def.Key == c.Fallback {
+	if def.Key == c.Fallback {
 		return
 	}
 

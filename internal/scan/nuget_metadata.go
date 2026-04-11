@@ -172,7 +172,7 @@ func (r *nugetResolver) resolveFromRegistration(packageName string, version stri
 	licenseValue := firstNonEmpty(entry.LicenseExpression, entry.LicenseURL)
 	licensePath := ""
 	licenseText := ""
-	if licenseValue == "" && strings.TrimSpace(leaf.PackageContent) != "" {
+	if strings.TrimSpace(entry.LicenseExpression) == "" && strings.TrimSpace(leaf.PackageContent) != "" {
 		var err error
 		licensePath, licenseText, err = r.resolveEmbeddedLicenseFromPackageContent(leaf.PackageContent)
 		if err == nil && licenseText != "" {

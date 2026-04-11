@@ -572,6 +572,411 @@
       "notice_template": "Microsoft Public License (Ms-PL)\n\nCovered software in this report: {{.PackageList}}\nThis license governs use of the accompanying software."
     },
     {
+      "key": "Microsoft-Software-License-Terms",
+      "name": "Microsoft Software License Terms",
+      "family": "Microsoft",
+      "version": "",
+      "copyleft_strength": "custom",
+      "requires_manual_review": true,
+      "spdx_ids": [],
+      "names": [
+        "Microsoft Software License Terms"
+      ],
+      "exact_urls": [],
+      "url_prefixes": [],
+      "contains": [
+        "microsoft software license terms"
+      ],
+      "text_matchers": [
+        "MICROSOFT SOFTWARE LICENSE TERMS",
+        "These license terms are an agreement between you and Microsoft Corporation",
+        "They apply to the software named above",
+        "Any other use of the software is not licensed"
+      ],
+      "text_match_threshold": 3,
+      "color": "#718096",
+      "risk_level": "unknown",
+      "notice_template": "Microsoft Software License Terms\n\nPackages: {{.PackageList}}\nThis package uses Microsoft Software License Terms and should be reviewed manually.\n\nSummary for review: object code redistribution may be permitted only as part of applications and subject to Microsoft terms. Standalone distribution, trademark endorsement, Excluded License conversion, reverse engineering, unsupported data collection, and export violations are restricted. Review the package LICENSE.txt before approval."
+    },
+    {
+      "key": "BUSL-1.1",
+      "name": "Business Source License 1.1",
+      "family": "BUSL",
+      "version": "1.1",
+      "copyleft_strength": "custom",
+      "requires_manual_review": true,
+      "spdx_ids": [
+        "BUSL-1.1"
+      ],
+      "names": [
+        "Business Source License 1.1",
+        "Business Source License",
+        "BSL 1.1",
+        "BUSL 1.1"
+      ],
+      "exact_urls": [
+        "https://mariadb.com/bsl11/"
+      ],
+      "url_prefixes": [],
+      "contains": [
+        "business source license",
+        "busl-1.1",
+        "bsl 1.1"
+      ],
+      "text_matchers": [
+        "Business Source License 1.1",
+        "The Licensor hereby grants you the right to copy, modify, create derivative works, redistribute, and make non-production use",
+        "Effective on the Change Date",
+        "If your use of the Licensed Work does not comply with the requirements currently in effect",
+        "must purchase a commercial license"
+      ],
+      "text_match_threshold": 3,
+      "color": "#b7791f",
+      "risk_level": "high",
+      "notice_template": "Business Source License 1.1\n\nPackages: {{.PackageList}}\nThis package uses Business Source License 1.1 and should be reviewed manually.\n\nSummary for review: BUSL is not an Open Source license before the configured Change Date. Production or restricted uses may require an Additional Use Grant or a commercial license. Review the package-specific license parameters, Additional Use Grant, Change Date, and Change License before approval."
+    },
+    {
+      "key": "Elastic-2.0",
+      "name": "Elastic License 2.0",
+      "family": "Elastic",
+      "version": "2.0",
+      "copyleft_strength": "custom",
+      "requires_manual_review": true,
+      "spdx_ids": [
+        "Elastic-2.0"
+      ],
+      "names": [
+        "Elastic License 2.0",
+        "Elastic License"
+      ],
+      "exact_urls": [
+        "https://www.elastic.co/licensing/elastic-license"
+      ],
+      "url_prefixes": [],
+      "contains": [
+        "elastic-2.0",
+        "elastic license 2.0"
+      ],
+      "text_matchers": [
+        "Elastic License 2.0",
+        "You may not provide the software to third parties as a hosted or managed service",
+        "You may not move, change, disable, or circumvent the license key functionality",
+        "You must ensure that anyone who gets a copy of any part of the software from you also gets a copy of these terms",
+        "These terms do not imply any licenses other than those expressly granted"
+      ],
+      "text_match_threshold": 3,
+      "color": "#b7791f",
+      "risk_level": "high",
+      "notice_template": "Elastic License 2.0\n\nPackages: {{.PackageList}}\nThis package uses Elastic License 2.0 and should be reviewed manually.\n\nSummary for review: redistribution and derivative use may be allowed, but hosted or managed service use, license-key circumvention, notice removal, and some patent-litigation scenarios are restricted. Review the project use case before approval."
+    },
+    {
+      "key": "SSPL-1.0",
+      "name": "Server Side Public License, v 1",
+      "family": "SSPL",
+      "version": "1.0",
+      "copyleft_strength": "network",
+      "requires_manual_review": true,
+      "spdx_ids": [
+        "SSPL-1.0"
+      ],
+      "names": [
+        "Server Side Public License, v 1",
+        "Server Side Public License",
+        "SSPL 1.0"
+      ],
+      "exact_urls": [
+        "https://www.mongodb.com/licensing/server-side-public-license"
+      ],
+      "url_prefixes": [],
+      "contains": [
+        "sspl-1.0",
+        "server side public license"
+      ],
+      "text_matchers": [
+        "Server Side Public License",
+        "VERSION 1, OCTOBER 16, 2018",
+        "If you make the functionality of the Program or a modified version available to third parties as a service",
+        "you must make the Service Source Code available via network download to everyone at no charge",
+        "Service Source Code means the Corresponding Source"
+      ],
+      "text_match_threshold": 3,
+      "color": "#9b2c2c",
+      "risk_level": "high",
+      "notice_template": "Server Side Public License, v 1\n\nPackages: {{.PackageList}}\nThis package uses SSPL-1.0 and should be reviewed manually.\n\nSummary for review: SSPL has strong network-service source disclosure obligations. If the program or a modified version is offered as a service, Service Source Code obligations may apply broadly to management, interface, automation, monitoring, backup, storage, and hosting software used to provide the service."
+    },
+    {
+      "key": "Commons-Clause",
+      "name": "Commons Clause License Condition v1.0",
+      "family": "Commons Clause",
+      "version": "1.0",
+      "copyleft_strength": "custom",
+      "requires_manual_review": true,
+      "spdx_ids": [],
+      "names": [
+        "Commons Clause License Condition v1.0",
+        "Commons Clause"
+      ],
+      "exact_urls": [
+        "https://commonsclause.com/"
+      ],
+      "url_prefixes": [],
+      "contains": [
+        "commons clause",
+        "commons-clause",
+        "commons-clause-1.0"
+      ],
+      "text_matchers": [
+        "Commons Clause License Condition v1.0",
+        "the License does not grant to you, the right to Sell the Software",
+        "For purposes of the foregoing, Sell means",
+        "whose value derives, entirely or substantially, from the functionality of the Software",
+        "Any license notice or attribution required by the License must also include this Commons Clause License Condition notice"
+      ],
+      "text_match_threshold": 3,
+      "color": "#b7791f",
+      "risk_level": "high",
+      "notice_template": "Commons Clause License Condition v1.0\n\nPackages: {{.PackageList}}\nThis package uses Commons Clause and should be reviewed manually.\n\nSummary for review: Commons Clause is an added condition on another license and removes the right to sell the software as defined by the clause. Review the base license, the software name, licensor, and whether the planned product or service derives substantial value from the component."
+    },
+    {
+      "key": "PolyForm-Noncommercial-1.0.0",
+      "name": "PolyForm Noncommercial License 1.0.0",
+      "family": "PolyForm",
+      "version": "1.0.0",
+      "copyleft_strength": "custom",
+      "requires_manual_review": true,
+      "spdx_ids": [
+        "PolyForm-Noncommercial-1.0.0"
+      ],
+      "names": [
+        "PolyForm Noncommercial License 1.0.0",
+        "PolyForm Noncommercial"
+      ],
+      "exact_urls": [
+        "https://polyformproject.org/licenses/noncommercial/1.0.0"
+      ],
+      "url_prefixes": [],
+      "contains": [
+        "polyform-noncommercial-1.0.0",
+        "polyform noncommercial license"
+      ],
+      "text_matchers": [
+        "PolyForm Noncommercial License 1.0.0",
+        "Any noncommercial purpose is a permitted purpose",
+        "Personal use for research, experiment, and testing",
+        "Noncommercial Organizations",
+        "These terms do not allow you to sublicense or transfer any of your licenses"
+      ],
+      "text_match_threshold": 3,
+      "color": "#9b2c2c",
+      "risk_level": "high",
+      "notice_template": "PolyForm Noncommercial License 1.0.0\n\nPackages: {{.PackageList}}\nThis package uses PolyForm Noncommercial License 1.0.0 and should be reviewed manually.\n\nSummary for review: permitted purposes are noncommercial. Commercial product, service, internal business, or revenue-adjacent use should be reviewed before approval. Notices, patent defense, no sublicense or transfer, and termination terms may also apply."
+    },
+    {
+      "key": "PolyForm-Small-Business-1.0.0",
+      "name": "PolyForm Small Business License 1.0.0",
+      "family": "PolyForm",
+      "version": "1.0.0",
+      "copyleft_strength": "custom",
+      "requires_manual_review": true,
+      "spdx_ids": [
+        "PolyForm-Small-Business-1.0.0"
+      ],
+      "names": [
+        "PolyForm Small Business License 1.0.0",
+        "PolyForm Small Business"
+      ],
+      "exact_urls": [
+        "https://polyformproject.org/licenses/small-business/1.0.0"
+      ],
+      "url_prefixes": [],
+      "contains": [
+        "polyform-small-business-1.0.0",
+        "polyform small business license"
+      ],
+      "text_matchers": [
+        "PolyForm Small Business License 1.0.0",
+        "Use of the software for the benefit of your company is use for a permitted purpose",
+        "fewer than 100 total individuals working as employees and independent contractors",
+        "less than 1,000,000 USD",
+        "These terms do not allow you to sublicense or transfer any of your licenses"
+      ],
+      "text_match_threshold": 3,
+      "color": "#9b2c2c",
+      "risk_level": "high",
+      "notice_template": "PolyForm Small Business License 1.0.0\n\nPackages: {{.PackageList}}\nThis package uses PolyForm Small Business License 1.0.0 and should be reviewed manually.\n\nSummary for review: permitted business use is limited by company size and revenue thresholds. Confirm whether the using entity qualifies before approval. Notices, patent defense, no sublicense or transfer, and termination terms may also apply."
+    },
+    {
+      "key": "FSL-1.1-MIT",
+      "name": "Functional Source License, Version 1.1, MIT Future License",
+      "family": "FSL",
+      "version": "1.1",
+      "copyleft_strength": "custom",
+      "requires_manual_review": true,
+      "spdx_ids": [
+        "FSL-1.1-MIT"
+      ],
+      "names": [
+        "Functional Source License, Version 1.1, MIT Future License",
+        "Functional Source License 1.1 MIT Future License",
+        "Functional Source License 1.1",
+        "FSL-1.1-MIT"
+      ],
+      "exact_urls": [
+        "https://spdx.org/licenses/FSL-1.1-MIT.html"
+      ],
+      "url_prefixes": [],
+      "contains": [
+        "functional source license",
+        "fsl-1.1-mit"
+      ],
+      "text_matchers": [
+        "Functional Source License, Version 1.1, MIT Future License",
+        "A Permitted Purpose is any purpose other than a Competing Use",
+        "Competing Use means making the Software available to others in a commercial product or service",
+        "for your internal use and access",
+        "effective on the second anniversary"
+      ],
+      "text_match_threshold": 3,
+      "color": "#b7791f",
+      "risk_level": "high",
+      "notice_template": "Functional Source License, Version 1.1, MIT Future License\n\nPackages: {{.PackageList}}\nThis package uses FSL-1.1-MIT and should be reviewed manually.\n\nSummary for review: use is permitted only for non-competing purposes before the future-license date. Competing commercial product or service use is restricted until the two-year conversion to MIT becomes effective."
+    },
+    {
+      "key": "FSL-1.1-ALv2",
+      "name": "Functional Source License, Version 1.1, ALv2 Future License",
+      "family": "FSL",
+      "version": "1.1",
+      "copyleft_strength": "custom",
+      "requires_manual_review": true,
+      "spdx_ids": [
+        "FSL-1.1-ALv2"
+      ],
+      "names": [
+        "Functional Source License, Version 1.1, ALv2 Future License",
+        "Functional Source License 1.1 ALv2 Future License",
+        "Functional Source License 1.1",
+        "FSL-1.1-ALv2"
+      ],
+      "exact_urls": [
+        "https://spdx.org/licenses/FSL-1.1-ALv2.html"
+      ],
+      "url_prefixes": [],
+      "contains": [
+        "functional source license",
+        "fsl-1.1-alv2"
+      ],
+      "text_matchers": [
+        "Functional Source License, Version 1.1, ALv2 Future License",
+        "A Permitted Purpose is any purpose other than a Competing Use",
+        "Competing Use means making the Software available to others in a commercial product or service",
+        "for your internal use and access",
+        "effective on the second anniversary"
+      ],
+      "text_match_threshold": 3,
+      "color": "#b7791f",
+      "risk_level": "high",
+      "notice_template": "Functional Source License, Version 1.1, ALv2 Future License\n\nPackages: {{.PackageList}}\nThis package uses FSL-1.1-ALv2 and should be reviewed manually.\n\nSummary for review: use is permitted only for non-competing purposes before the future-license date. Competing commercial product or service use is restricted until the two-year conversion to Apache-2.0 becomes effective."
+    },
+    {
+      "key": "Confluent-Community-License",
+      "name": "Confluent Community License Version 1.0",
+      "family": "Confluent",
+      "version": "1.0",
+      "copyleft_strength": "custom",
+      "requires_manual_review": true,
+      "spdx_ids": [],
+      "names": [
+        "Confluent Community License Version 1.0",
+        "Confluent Community License"
+      ],
+      "exact_urls": [
+        "https://www.confluent.io/confluent-community-license/"
+      ],
+      "url_prefixes": [],
+      "contains": [
+        "confluent community license"
+      ],
+      "text_matchers": [
+        "Confluent Community License Version 1.0",
+        "Excluded Purpose means making available any software-as-a-service",
+        "that competes with Confluent products or services that provide the Software",
+        "Licensee must cause any Software modified by Licensee to carry prominent notices",
+        "Licensee shall not exercise the License for an Excluded Purpose",
+        "not granted the right to, and Licensee shall not, exercise the License for an Excluded Purpose"
+      ],
+      "text_match_threshold": 2,
+      "color": "#b7791f",
+      "risk_level": "high",
+      "notice_template": "Confluent Community License Version 1.0\n\nPackages: {{.PackageList}}\nThis package uses the Confluent Community License and should be reviewed manually.\n\nSummary for review: source modification and redistribution are allowed, but competing SaaS, PaaS, IaaS, or similar online service use is excluded. Redistribution requires preserving notices and marking modifications."
+    },
+    {
+      "key": "Timescale-License",
+      "name": "Timescale License Agreement",
+      "family": "Timescale",
+      "version": "",
+      "copyleft_strength": "custom",
+      "requires_manual_review": true,
+      "spdx_ids": [],
+      "names": [
+        "Timescale License Agreement",
+        "Timescale License",
+        "TSL Agreement"
+      ],
+      "exact_urls": [
+        "https://www.tigerdata.com/legal/licenses"
+      ],
+      "url_prefixes": [],
+      "contains": [
+        "timescale license agreement",
+        "timescale license",
+        "tsl agreement"
+      ],
+      "text_matchers": [
+        "TIMESCALE LICENSE AGREEMENT",
+        "Value Added Products or Services",
+        "Time-sharing services or database-as-a-service services",
+        "offered or made available to third parties to provide time-series database functions or operations",
+        "TimescaleDB Community Edition"
+      ],
+      "text_match_threshold": 3,
+      "color": "#b7791f",
+      "risk_level": "high",
+      "notice_template": "Timescale License Agreement\n\nPackages: {{.PackageList}}\nThis package uses the Timescale License Agreement and should be reviewed manually.\n\nSummary for review: internal use, some value-added products or services, and some standalone distribution may be allowed, but DBaaS, SaaS, or similar service offerings of the licensed software are restricted. Review whether the planned use is a qualifying value-added product or service."
+    },
+    {
+      "key": "CockroachDB-Community-License",
+      "name": "CockroachDB Community License Agreement",
+      "family": "CockroachDB",
+      "version": "",
+      "copyleft_strength": "custom",
+      "requires_manual_review": true,
+      "spdx_ids": [],
+      "names": [
+        "CockroachDB Community License Agreement",
+        "CockroachDB Community License",
+        "CCL"
+      ],
+      "exact_urls": [
+        "https://www.cockroachlabs.com/cockroachdb-community-license/"
+      ],
+      "url_prefixes": [],
+      "contains": [
+        "cockroachdb community license",
+        "cockroachdb community license agreement"
+      ],
+      "text_matchers": [
+        "CockroachDB Community License Agreement",
+        "Grant of Copyright License",
+        "CockroachDB Self-hosted",
+        "Paid Enterprise License",
+        "Enterprise Derivative Works"
+      ],
+      "text_match_threshold": 3,
+      "color": "#b7791f",
+      "risk_level": "high",
+      "notice_template": "CockroachDB Community License Agreement\n\nPackages: {{.PackageList}}\nThis package uses the CockroachDB Community License Agreement and should be reviewed manually.\n\nSummary for review: the agreement distinguishes CockroachDB Core from Self-hosted features. Some self-hosted or enterprise features may require a paid enterprise license, and redistribution of enterprise derivative works carries additional conditions. Confirm which edition and features are actually in use."
+    },
+    {
       "key": "NCSA",
       "name": "NCSA License",
       "family": "NCSA",

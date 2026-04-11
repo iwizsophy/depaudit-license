@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"depaudit-license/internal/catalog"
+	"depaudit-license/internal/externalaccess"
 	"depaudit-license/internal/inventory"
 )
 
@@ -37,6 +38,10 @@ func TestBuildOutputWrapsViewWithSchemaAndProvenance(t *testing.T) {
 			{Kind: "file", Location: "D:\\repo\\configs\\licenses.json", DisplayLocation: "configs\\licenses.json", PinningMode: "implicit", ContentSHA256: "abc"},
 			{Kind: "remote", Location: "https://example.test/licenses.json#sha256=deadbeef", DisplayLocation: "https://example.test/licenses.json#sha256=deadbeef", ResolvedURL: "https://example.test/licenses.json", PinningMode: "pinned", RequestedSHA256: "deadbeef", ContentSHA256: "beef", RetrievedAt: "2026-04-02T00:00:00Z"},
 		},
+		ExternalSources: []externalaccess.Service{
+			{ID: "npm-registry", Purpose: "metadata-enrichment", BaseURL: "https://registry.npmjs.org", CacheMode: "use", CacheTTL: "24h0m0s"},
+			{ID: "osv", Purpose: "vulnerability", BaseURL: "https://api.osv.dev", CacheMode: "use", CacheTTL: "24h0m0s"},
+		},
 		SelectedLocale:   "ja",
 		EffectiveCatalog: json.RawMessage(`{"fallback":"Unknown","licenses":[]}`),
 	})
@@ -53,6 +58,9 @@ func TestBuildOutputWrapsViewWithSchemaAndProvenance(t *testing.T) {
 	if len(output.Provenance.CatalogSources) != 2 {
 		t.Fatalf("catalog source count = %d", len(output.Provenance.CatalogSources))
 	}
+	if len(output.Provenance.ExternalSources) != 2 {
+		t.Fatalf("external source count = %d", len(output.Provenance.ExternalSources))
+	}
 	if output.Provenance.CatalogSources[0].Kind != "file" {
 		t.Fatalf("first catalog source kind = %q", output.Provenance.CatalogSources[0].Kind)
 	}
@@ -64,6 +72,9 @@ func TestBuildOutputWrapsViewWithSchemaAndProvenance(t *testing.T) {
 	}
 	if output.Provenance.CatalogSources[1].PinningMode != "pinned" {
 		t.Fatalf("pinning mode = %q", output.Provenance.CatalogSources[1].PinningMode)
+	}
+	if output.Provenance.ExternalSources[0].ID != "npm-registry" || output.Provenance.ExternalSources[1].ID != "osv" {
+		t.Fatalf("external sources = %#v", output.Provenance.ExternalSources)
 	}
 	if string(output.Provenance.EffectiveCatalog) == "" {
 		t.Fatal("expected effective catalog snapshot")

@@ -1,8 +1,10 @@
 package enrich
 
 import (
+	"fmt"
 	"net/http"
 	"slices"
+	"strings"
 
 	"depaudit-license/internal/catalog"
 	"depaudit-license/internal/inventory"
@@ -16,28 +18,48 @@ type Config struct {
 	NodeRegistryBaseURL      string
 	NuGetGlobalPackagesRoot  string
 	NuGetRegistrationBaseURL string
+	ArtifactReadLimits       scan.ArtifactReadLimits
 }
 
-func Apply(cfg Config, doc inventory.Document) (inventory.Document, error) {
-	service := scan.NewMetadataLookupService(scan.MetadataLookupConfig{
+func ApplyLocal(cfg Config, doc inventory.Document) (inventory.Document, error) {
+	return applyWithMode(cfg, doc, scan.MetadataLookupModeLocal)
+}
+
+func ApplyRemote(cfg Config, doc inventory.Document) (inventory.Document, error) {
+	return applyWithMode(cfg, doc, scan.MetadataLookupModeRemote)
+}
+
+func applyWithMode(cfg Config, doc inventory.Document, mode string) (inventory.Document, error) {
+	service, err := scan.NewMetadataLookupService(scan.MetadataLookupConfig{
 		Client:                   cfg.Client,
 		Catalog:                  cfg.Catalog,
 		RepositoryRoots:          cfg.RepositoryRoots,
 		NodeRegistryBaseURL:      cfg.NodeRegistryBaseURL,
 		NuGetGlobalPackagesRoot:  cfg.NuGetGlobalPackagesRoot,
 		NuGetRegistrationBaseURL: cfg.NuGetRegistrationBaseURL,
+		ArtifactReadLimits:       cfg.ArtifactReadLimits,
+		Mode:                     mode,
 	})
+	if err != nil {
+		return inventory.Document{}, err
+	}
 
 	result := cloneDocument(doc)
 
 	for index, pkg := range result.Packages {
-		enriched, source, changed := service.EnrichPackage(pkg)
+		enriched, source, changed, err := service.EnrichPackage(pkg)
+		if err != nil {
+			return inventory.Document{}, err
+		}
 		if !changed {
 			continue
 		}
 		result.Packages[index] = enriched
 		if source != nil && !hasSource(result.Sources, source.ID) {
 			result.Sources = append(result.Sources, *source)
+		}
+		if diagnostic, ok := remoteResolutionFallbackDiagnostic(enriched, source); ok {
+			result.Diagnostics = append(result.Diagnostics, diagnostic)
 		}
 	}
 
@@ -78,6 +100,10 @@ func clonePackages(packages []inventory.Package) []inventory.Package {
 				cloned[index].Provenance.FieldOrigins[field] = origin
 			}
 		}
+		if pkg.Provenance.ArtifactResolution != nil {
+			resolution := *pkg.Provenance.ArtifactResolution
+			cloned[index].Provenance.ArtifactResolution = &resolution
+		}
 	}
 	return cloned
 }
@@ -115,4 +141,28 @@ func hasSource(sources []inventory.Source, id string) bool {
 		}
 	}
 	return false
+}
+
+func remoteResolutionFallbackDiagnostic(pkg inventory.Package, source *inventory.Source) (inventory.Diagnostic, bool) {
+	if pkg.Provenance.ArtifactResolution == nil || !pkg.Provenance.ArtifactResolution.ReviewRequired {
+		return inventory.Diagnostic{}, false
+	}
+
+	sourceID := ""
+	if source != nil {
+		sourceID = strings.TrimSpace(source.ID)
+	}
+	packageName := strings.TrimSpace(pkg.Name)
+	if version := strings.TrimSpace(pkg.Version); version != "" {
+		packageName += "@" + version
+	}
+
+	return inventory.Diagnostic{
+		SourceID:  sourceID,
+		Code:      "remote_resolution_fallback_used",
+		Severity:  "warning",
+		Message:   fmt.Sprintf("%s used remote resolution fallback (%s); manual review required", packageName, strings.TrimSpace(pkg.Provenance.ArtifactResolution.ReviewReason)),
+		Ecosystem: strings.TrimSpace(pkg.Ecosystem),
+		Project:   strings.TrimSpace(pkg.Project),
+	}, true
 }

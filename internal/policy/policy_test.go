@@ -125,33 +125,6 @@ func TestValidateSelectorNormalizesAndRejectsEmptySelector(t *testing.T) {
 	}
 }
 
-func TestMergeLegacyPatternsSynthesizesShallowRule(t *testing.T) {
-	t.Parallel()
-
-	doc := MergeLegacyPatterns(File{Version: VersionV1Alpha1}, []string{"webpack", "eslint"})
-	if len(doc.ShallowExcludes) != 1 {
-		t.Fatalf("expected one synthesized shallow rule, got %d", len(doc.ShallowExcludes))
-	}
-	if doc.ShallowExcludes[0].ID != legacyExcludePatternsRuleID {
-		t.Fatalf("unexpected synthesized rule id: %q", doc.ShallowExcludes[0].ID)
-	}
-	if got := doc.ShallowExcludes[0].Match.NameGlobs; len(got) != 2 || got[0] != "*webpack*" || got[1] != "*eslint*" {
-		t.Fatalf("unexpected synthesized globs: %#v", got)
-	}
-}
-
-func TestMergeLegacyPatternsIgnoresBlankValues(t *testing.T) {
-	t.Parallel()
-
-	doc := MergeLegacyPatterns(File{Version: VersionV1Alpha1}, []string{" ", "eslint", "", "webpack"})
-	if len(doc.ShallowExcludes) != 1 {
-		t.Fatalf("expected one synthesized rule, got %d", len(doc.ShallowExcludes))
-	}
-	if got := doc.ShallowExcludes[0].Match.NameGlobs; len(got) != 2 || got[0] != "*eslint*" || got[1] != "*webpack*" {
-		t.Fatalf("unexpected normalized globs: %#v", got)
-	}
-}
-
 func TestLoadFileReadsAndWrapsErrors(t *testing.T) {
 	t.Parallel()
 
@@ -187,15 +160,5 @@ func TestLoadFileParsesValidPolicy(t *testing.T) {
 	}
 	if len(doc.SubgraphExcludes) != 1 || doc.SubgraphExcludes[0].OnUnsupported != OnUnsupportedIgnore {
 		t.Fatalf("loaded document = %#v", doc)
-	}
-}
-
-func TestMergeLegacyPatternsLeavesDocumentUntouchedWhenPatternsBlank(t *testing.T) {
-	t.Parallel()
-
-	doc := File{Version: VersionV1Alpha1, ShallowExcludes: []Rule{{ID: "existing", Match: Selector{Names: []string{"pkg"}}}}}
-	merged := MergeLegacyPatterns(doc, []string{" ", ""})
-	if len(merged.ShallowExcludes) != 1 || merged.ShallowExcludes[0].ID != "existing" {
-		t.Fatalf("merged = %#v", merged)
 	}
 }

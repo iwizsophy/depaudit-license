@@ -15,8 +15,6 @@ const (
 	OnUnsupportedWarn   = "warn"
 	OnUnsupportedError  = "error"
 	OnUnsupportedIgnore = "ignore"
-
-	legacyExcludePatternsRuleID = "legacy-exclude-patterns"
 )
 
 type File struct {
@@ -93,29 +91,6 @@ func (f *File) Validate() error {
 	}
 
 	return nil
-}
-
-func MergeLegacyPatterns(doc File, patterns []string) File {
-	normalized := normalizeStrings(patterns)
-	if len(normalized) == 0 {
-		return doc
-	}
-	doc.ShallowExcludes = append(doc.ShallowExcludes, Rule{
-		ID:     legacyExcludePatternsRuleID,
-		Reason: "synthesized from -exclude-patterns",
-		Match: Selector{
-			NameGlobs: legacyPatternGlobs(normalized),
-		},
-	})
-	return doc
-}
-
-func legacyPatternGlobs(patterns []string) []string {
-	result := make([]string, 0, len(patterns))
-	for _, pattern := range patterns {
-		result = append(result, "*"+pattern+"*")
-	}
-	return result
 }
 
 type ruleContext struct {

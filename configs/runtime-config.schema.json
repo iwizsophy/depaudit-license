@@ -1,0 +1,142 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://depaudit-license.local/configs/runtime-config.schema.json",
+  "title": "depaudit-license runtime config",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version"],
+  "properties": {
+    "version": {
+      "type": "string",
+      "const": "v1alpha1"
+    },
+    "inputs": {
+      "$ref": "#/$defs/stringList"
+    },
+    "outputHtml": {
+      "$ref": "#/$defs/nonEmptyString"
+    },
+    "outputJson": {
+      "$ref": "#/$defs/nonEmptyString"
+    },
+    "outputLegalHtml": {
+      "$ref": "#/$defs/nonEmptyString"
+    },
+    "outputVulnHtml": {
+      "$ref": "#/$defs/nonEmptyString"
+    },
+    "outputVulnJson": {
+      "$ref": "#/$defs/nonEmptyString"
+    },
+    "vulnMode": {
+      "type": "string",
+      "enum": ["disabled", "osv-only", "osv+github", "full"]
+    },
+    "licenseCatalogs": {
+      "$ref": "#/$defs/stringList"
+    },
+    "locale": {
+      "$ref": "#/$defs/nonEmptyString"
+    },
+    "licenseTextBundle": {
+      "$ref": "#/$defs/nonEmptyString"
+    },
+    "licenseOverrideFile": {
+      "$ref": "#/$defs/nonEmptyString"
+    },
+    "excludePolicy": {
+      "$ref": "#/$defs/nonEmptyString"
+    },
+    "remoteCatalogMode": {
+      "type": "string",
+      "enum": ["fail-fast", "stale-fallback"]
+    },
+    "remoteCatalogCacheDir": {
+      "$ref": "#/$defs/nonEmptyString"
+    },
+    "httpCacheMode": {
+      "type": "string",
+      "enum": ["off", "use", "refresh", "cache-only"]
+    },
+    "httpCacheDir": {
+      "$ref": "#/$defs/nonEmptyString"
+    },
+    "httpCacheTtl": {
+      "$ref": "#/$defs/nonEmptyString"
+    },
+    "template": {
+      "$ref": "#/$defs/nonEmptyString"
+    },
+    "themeCss": {
+      "$ref": "#/$defs/nonEmptyString"
+    },
+    "legalTemplate": {
+      "$ref": "#/$defs/nonEmptyString"
+    },
+    "legalThemeCss": {
+      "$ref": "#/$defs/nonEmptyString"
+    },
+    "vulnTemplate": {
+      "$ref": "#/$defs/nonEmptyString"
+    },
+    "vulnThemeCss": {
+      "$ref": "#/$defs/nonEmptyString"
+    },
+    "npmRegistryBaseUrl": {
+      "$ref": "#/$defs/nonEmptyString"
+    },
+    "nugetRegistrationBaseUrl": {
+      "$ref": "#/$defs/nonEmptyString"
+    },
+    "osvBaseUrl": {
+      "$ref": "#/$defs/nonEmptyString"
+    },
+    "githubAdvisoryBaseUrl": {
+      "$ref": "#/$defs/nonEmptyString"
+    },
+    "githubAdvisoryToken": {
+      "$ref": "#/$defs/nonEmptyString"
+    },
+    "nvdBaseUrl": {
+      "$ref": "#/$defs/nonEmptyString"
+    },
+    "nvdApiKey": {
+      "$ref": "#/$defs/nonEmptyString"
+    },
+    "maxPackageArtifactBytes": {
+      "$ref": "#/$defs/positiveInt64"
+    },
+    "maxPackageMetadataBytes": {
+      "$ref": "#/$defs/positiveInt64"
+    },
+    "maxEmbeddedLicenseBytes": {
+      "$ref": "#/$defs/positiveInt64"
+    },
+    "maxPackageArchiveEntries": {
+      "$ref": "#/$defs/positiveInt"
+    },
+    "timeoutSeconds": {
+      "$ref": "#/$defs/positiveInt"
+    }
+  },
+  "$defs": {
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "stringList": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/nonEmptyString"
+      }
+    },
+    "positiveInt": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "positiveInt64": {
+      "type": "integer",
+      "minimum": 1
+    }
+  }
+}

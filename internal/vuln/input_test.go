@@ -69,6 +69,12 @@ func TestAssessmentInputHelpersHandleEdgeCases(t *testing.T) {
 			SourceIDs:      []string{"b", "a"},
 			FieldOrigins:   map[string]string{"repository": " enrich:node "},
 			ConflictFields: []string{"version", "name"},
+			ArtifactResolution: &inventory.ArtifactResolution{
+				Kind:           "remote-package-content",
+				Detail:         "nuget-package-content",
+				ReviewRequired: true,
+				ReviewReason:   "local-package-manager-artifact-not-available",
+			},
 		},
 	})
 	if err != nil {
@@ -85,6 +91,9 @@ func TestAssessmentInputHelpersHandleEdgeCases(t *testing.T) {
 	}
 	if len(ref.ConflictFields) != 2 || ref.ConflictFields[0] != "name" {
 		t.Fatalf("conflict fields = %#v", ref.ConflictFields)
+	}
+	if ref.ArtifactResolution == nil || ref.ArtifactResolution.Kind != "remote-package-content" || !ref.ArtifactResolution.ReviewRequired {
+		t.Fatalf("artifact resolution = %#v", ref.ArtifactResolution)
 	}
 
 	aliases := aliasesForPackage(inventory.Package{

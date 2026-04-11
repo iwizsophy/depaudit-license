@@ -126,6 +126,122 @@ func TestMergePackageHelperBranches(t *testing.T) {
 	if merged.MetadataSource != "repo-scan" {
 		t.Fatalf("metadata source should preserve base when incoming empty: %q", merged.MetadataSource)
 	}
+
+	base.Provenance.ArtifactResolution = &inventory.ArtifactResolution{
+		Kind:           "remote-metadata",
+		Detail:         "npm-registry-version",
+		ReviewRequired: true,
+		ReviewReason:   "local-package-manager-artifact-not-available",
+	}
+	incoming.Provenance.ArtifactResolution = &inventory.ArtifactResolution{
+		Kind:   "local-package-manager",
+		Detail: "node-modules",
+	}
+
+	merged, conflicts = mergePackage(base, incoming)
+	if len(conflicts) != 1 || conflicts[0].Field != "copyrightYear" {
+		t.Fatalf("copyright conflict = %#v", conflicts)
+	}
+	if merged.Provenance.ArtifactResolution == nil || merged.Provenance.ArtifactResolution.Kind != "local-package-manager" || merged.Provenance.ArtifactResolution.Detail != "node-modules" || merged.Provenance.ArtifactResolution.ReviewRequired {
+		t.Fatalf("artifact resolution = %#v", merged.Provenance.ArtifactResolution)
+	}
+}
+
+func TestDocumentsPreserveIncomingArtifactResolutionWhenBaseLacksIt(t *testing.T) {
+	t.Parallel()
+
+	docA := inventory.Document{
+		Sources: []inventory.Source{{ID: "sbom"}},
+		Packages: []inventory.Package{{
+			Ecosystem: "node",
+			Project:   "web",
+			Name:      "react",
+			Version:   "18.2.0",
+			Provenance: inventory.PackageProvenance{
+				SourceIDs: []string{"sbom"},
+			},
+		}},
+	}
+	docB := inventory.Document{
+		Sources: []inventory.Source{{ID: "repo"}},
+		Packages: []inventory.Package{{
+			Ecosystem: "node",
+			Project:   "web",
+			Name:      "react",
+			Version:   "18.2.0",
+			Provenance: inventory.PackageProvenance{
+				SourceIDs: []string{"repo"},
+				ArtifactResolution: &inventory.ArtifactResolution{
+					Kind:   "local-package-manager",
+					Detail: "node-modules",
+				},
+			},
+		}},
+	}
+
+	merged := Documents(Config{}, docA, docB)
+	react := findPackage(t, merged.Packages, "react")
+	if react.Provenance.ArtifactResolution == nil || react.Provenance.ArtifactResolution.Kind != "local-package-manager" || react.Provenance.ArtifactResolution.Detail != "node-modules" {
+		t.Fatalf("artifact resolution = %#v", react.Provenance.ArtifactResolution)
+	}
+}
+
+func TestMergeArtifactResolutionBranches(t *testing.T) {
+	t.Parallel()
+
+	if got := mergeArtifactResolution(nil, nil); got != nil {
+		t.Fatalf("nil merge = %#v", got)
+	}
+
+	incoming := &inventory.ArtifactResolution{
+		Kind:           "remote-metadata",
+		Detail:         "npm-registry-version",
+		ReviewRequired: true,
+	}
+	got := mergeArtifactResolution(nil, incoming)
+	if got == nil || got.Kind != incoming.Kind || got == incoming {
+		t.Fatalf("incoming-only merge = %#v", got)
+	}
+
+	base := &inventory.ArtifactResolution{
+		Kind:   "local-package-manager",
+		Detail: "node-modules",
+	}
+	got = mergeArtifactResolution(base, incoming)
+	if got == nil || got.Kind != "local-package-manager" {
+		t.Fatalf("local should win = %#v", got)
+	}
+
+	got = mergeArtifactResolution(
+		&inventory.ArtifactResolution{Kind: "remote-metadata", Detail: "registry-a", ReviewRequired: true},
+		&inventory.ArtifactResolution{Kind: "remote-metadata", Detail: "registry-b"},
+	)
+	if got == nil || got.Detail != "registry-b" || got.ReviewRequired {
+		t.Fatalf("non-review should win on tie = %#v", got)
+	}
+
+	got = mergeArtifactResolution(
+		&inventory.ArtifactResolution{Kind: "remote-package-content", ReviewRequired: true},
+		&inventory.ArtifactResolution{Kind: "remote-package-content", Detail: "nuget-package-content", ReviewRequired: true},
+	)
+	if got == nil || got.Detail != "nuget-package-content" {
+		t.Fatalf("detail should fill tie = %#v", got)
+	}
+
+	got = mergeArtifactResolution(
+		&inventory.ArtifactResolution{Kind: "remote-package-content", Detail: "nuget-package-content", ReviewRequired: true},
+		&inventory.ArtifactResolution{Kind: "remote-package-content", Detail: "nuget-package-content", ReviewRequired: true, ReviewReason: "local-package-manager-artifact-not-available"},
+	)
+	if got == nil || got.ReviewReason != "local-package-manager-artifact-not-available" {
+		t.Fatalf("review reason should fill tie = %#v", got)
+	}
+
+	if rank := artifactResolutionRank(&inventory.ArtifactResolution{Kind: "custom"}); rank != 0 {
+		t.Fatalf("unexpected custom rank = %d", rank)
+	}
+	if rank := artifactResolutionRank(nil); rank != -1 {
+		t.Fatalf("unexpected nil rank = %d", rank)
+	}
 }
 
 func TestMergeMetadataSourceHelperBranches(t *testing.T) {

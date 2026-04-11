@@ -171,7 +171,7 @@ func TestBuildChecklistAndRenderSuccessBranches(t *testing.T) {
 	if len(checklist.PackageFindings) != 2 || checklist.PackageFindings[0].Name != "react" || checklist.PackageFindings[1].Name != "Newtonsoft.Json" {
 		t.Fatalf("package findings = %#v", checklist.PackageFindings)
 	}
-	output := BuildChecklistOutput(input, checklist)
+	output := BuildChecklistOutput(input, checklist, nil)
 	if output.SchemaVersion != JSONChecklistSchemaVersion || output.Provenance.InputSchemaVersion != InputSchemaVersion {
 		t.Fatalf("output provenance = %#v", output)
 	}

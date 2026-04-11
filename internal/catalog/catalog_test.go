@@ -422,8 +422,11 @@ func TestNormalizeHandlesCommonExpressionsWithRealCatalog(t *testing.T) {
 	cases := map[string]string{
 		"GPL-2.0-only WITH Classpath-exception-2.0":   "GPL-2.0",
 		"https://opensource.org/licenses/MIT?ref=abc": "MIT",
-		"EPL-1.0":  "EPL-1.0",
-		"CDDL-1.1": "CDDL-1.1",
+		"EPL-1.0":                                   "EPL-1.0",
+		"CDDL-1.1":                                  "CDDL-1.1",
+		"Functional Source License 1.1":             "Unknown",
+		"Functional Source License 1.1 MIT Future License":  "FSL-1.1-MIT",
+		"Functional Source License 1.1 ALv2 Future License": "FSL-1.1-ALv2",
 	}
 
 	for input, want := range cases {

@@ -83,11 +83,10 @@ func TestBuildFiltersProductionAndRendersNotice(t *testing.T) {
 	}
 
 	view := BuildDocument(Config{
-		Root:            ".",
-		ExcludePatterns: []string{"internal."},
+		Root: ".",
 		ShallowRules: []policy.Rule{{
-			ID:     "legacy-exclude-patterns",
-			Reason: "synthesized from -exclude-patterns",
+			ID:     "omit-internal",
+			Reason: "hide internal package",
 			Match: policy.Selector{
 				NameGlobs: []string{"*internal.*"},
 			},
@@ -115,7 +114,7 @@ func TestBuildFiltersProductionAndRendersNotice(t *testing.T) {
 	if len(view.ExcludedPackages) != 1 {
 		t.Fatalf("expected 1 excluded package, got %d", len(view.ExcludedPackages))
 	}
-	if view.ExcludedPackages[0].RuleID != "legacy-exclude-patterns" || view.ExcludedPackages[0].Package.Name != "internal.package" {
+	if view.ExcludedPackages[0].RuleID != "omit-internal" || view.ExcludedPackages[0].Package.Name != "internal.package" {
 		t.Fatalf("unexpected excluded package diagnostic: %#v", view.ExcludedPackages[0])
 	}
 	mitGroup := view.Groups[0]
@@ -142,7 +141,7 @@ func TestBuildFiltersProductionAndRendersNotice(t *testing.T) {
 	}
 }
 
-func TestBuildDocumentPolicyShallowExcludeMatchesLegacyPatterns(t *testing.T) {
+func TestBuildDocumentPolicyShallowExcludeRemovesMatchedPackage(t *testing.T) {
 	t.Parallel()
 
 	cat := &catalog.Catalog{
@@ -157,17 +156,6 @@ func TestBuildDocumentPolicyShallowExcludeMatchesLegacyPatterns(t *testing.T) {
 		{Ecosystem: "node", Project: "web", Name: "internal-helper", Version: "1.0.0", DependencyType: "dependency", LicenseKey: "MIT", Provenance: inventory.PackageProvenance{SourceIDs: []string{"repo-scan"}}},
 	}}
 
-	legacyView := BuildDocument(Config{
-		Root:            ".",
-		ExcludePatterns: []string{"internal-helper"},
-		ShallowRules: []policy.Rule{{
-			ID:     "legacy-exclude-patterns",
-			Reason: "synthesized from -exclude-patterns",
-			Match: policy.Selector{
-				NameGlobs: []string{"*internal-helper*"},
-			},
-		}},
-	}, doc, cat)
 	policyView := BuildDocument(Config{
 		Root: ".",
 		ShallowRules: []policy.Rule{{
@@ -179,11 +167,11 @@ func TestBuildDocumentPolicyShallowExcludeMatchesLegacyPatterns(t *testing.T) {
 		}},
 	}, doc, cat)
 
-	if len(legacyView.Packages) != len(policyView.Packages) || legacyView.Packages[0].Name != policyView.Packages[0].Name {
-		t.Fatalf("visible packages differ: legacy=%#v policy=%#v", legacyView.Packages, policyView.Packages)
+	if len(policyView.Packages) != 1 || policyView.Packages[0].Name != "react" {
+		t.Fatalf("visible packages = %#v", policyView.Packages)
 	}
-	if len(legacyView.ExcludedPackages) != 1 || len(policyView.ExcludedPackages) != 1 {
-		t.Fatalf("excluded diagnostics differ: legacy=%#v policy=%#v", legacyView.ExcludedPackages, policyView.ExcludedPackages)
+	if len(policyView.ExcludedPackages) != 1 {
+		t.Fatalf("excluded diagnostics = %#v", policyView.ExcludedPackages)
 	}
 	if policyView.ExcludedPackages[0].Package.Name != "internal-helper" {
 		t.Fatalf("unexpected excluded package = %#v", policyView.ExcludedPackages[0])

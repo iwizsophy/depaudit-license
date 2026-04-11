@@ -143,7 +143,7 @@ func TestGitHubAdvisoryHelpersHandleEdgeCases(t *testing.T) {
 	if _, err := client.queryPackage(context.Background(), http.DefaultClient, "://bad-base", QueryRef{}); err == nil {
 		t.Fatal("expected queryPackage parse error")
 	}
-	if _, _, err := client.fetchAdvisoryPage(context.Background(), http.DefaultClient, "://bad-endpoint"); err == nil {
+	if _, _, err := client.fetchAdvisoryPage(context.Background(), http.DefaultClient, DefaultGitHubAdvisoryBaseURL, "://bad-endpoint"); err == nil {
 		t.Fatal("expected fetchAdvisoryPage request build error")
 	}
 
@@ -151,7 +151,7 @@ func TestGitHubAdvisoryHelpersHandleEdgeCases(t *testing.T) {
 		http.Error(w, "rate limited", http.StatusTooManyRequests)
 	}))
 	defer statusServer.Close()
-	if _, _, err := client.fetchAdvisoryPage(context.Background(), statusServer.Client(), statusServer.URL); err == nil || !strings.Contains(err.Error(), "status 429") {
+	if _, _, err := client.fetchAdvisoryPage(context.Background(), statusServer.Client(), statusServer.URL, statusServer.URL); err == nil || !strings.Contains(err.Error(), "status 429") {
 		t.Fatalf("expected status error, got %v", err)
 	}
 
@@ -160,7 +160,7 @@ func TestGitHubAdvisoryHelpersHandleEdgeCases(t *testing.T) {
 		_, _ = w.Write([]byte("{"))
 	}))
 	defer invalidJSONServer.Close()
-	if _, _, err := client.fetchAdvisoryPage(context.Background(), invalidJSONServer.Client(), invalidJSONServer.URL); err == nil {
+	if _, _, err := client.fetchAdvisoryPage(context.Background(), invalidJSONServer.Client(), invalidJSONServer.URL, invalidJSONServer.URL); err == nil {
 		t.Fatal("expected invalid JSON error")
 	}
 
@@ -171,7 +171,7 @@ func TestGitHubAdvisoryHelpersHandleEdgeCases(t *testing.T) {
 			Body:       testutil.ErrorBody(errors.New("boom")),
 		}, nil
 	})}
-	if _, _, err := client.fetchAdvisoryPage(context.Background(), bodyErrClient, "https://example.test/advisories"); err == nil {
+	if _, _, err := client.fetchAdvisoryPage(context.Background(), bodyErrClient, DefaultGitHubAdvisoryBaseURL, "https://example.test/advisories"); err == nil {
 		t.Fatal("expected body read/decode error")
 	}
 
@@ -236,7 +236,7 @@ func TestGitHubAdvisoryRequestHeadersIncludeVersionAndToken(t *testing.T) {
 		BaseURL: server.URL,
 		Client:  server.Client(),
 		Token:   " test-token ",
-	}.fetchAdvisoryPage(context.Background(), server.Client(), server.URL+"/advisories")
+	}.fetchAdvisoryPage(context.Background(), server.Client(), server.URL, server.URL+"/advisories")
 	if err != nil {
 		t.Fatalf("fetchAdvisoryPage: %v", err)
 	}

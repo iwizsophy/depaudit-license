@@ -9,6 +9,8 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+
+	"depaudit-license/internal/externalaccess"
 )
 
 const (
@@ -124,7 +126,7 @@ func (c GitHubAdvisoryClient) queryPackage(ctx context.Context, client *http.Cli
 	var advisories []AdvisoryRef
 	nextURL := endpoint.String()
 	for nextURL != "" {
-		page, pageNextURL, err := c.fetchAdvisoryPage(ctx, client, nextURL)
+		page, pageNextURL, err := c.fetchAdvisoryPage(ctx, client, baseURL, nextURL)
 		if err != nil {
 			return nil, err
 		}
@@ -134,11 +136,17 @@ func (c GitHubAdvisoryClient) queryPackage(ctx context.Context, client *http.Cli
 	return dedupeAdvisories(advisories), nil
 }
 
-func (c GitHubAdvisoryClient) fetchAdvisoryPage(ctx context.Context, client *http.Client, endpoint string) ([]AdvisoryRef, string, error) {
+func (c GitHubAdvisoryClient) fetchAdvisoryPage(ctx context.Context, client *http.Client, baseURL string, endpoint string) ([]AdvisoryRef, string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return nil, "", err
 	}
+	req = externalaccess.WithRequestService(req, externalaccess.Service{
+		ID:             "github-advisory",
+		Purpose:        "vulnerability",
+		BaseURL:        baseURL,
+		AuthConfigured: strings.TrimSpace(c.Token) != "",
+	})
 	req.Header.Set("Accept", "application/vnd.github+json")
 	req.Header.Set("X-GitHub-Api-Version", defaultGitHubAPIVersion)
 	req.Header.Set("User-Agent", "depaudit-license")

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -110,8 +111,15 @@ func TestParseFlagsKeepsExplicitVulnerabilityModeAndTimeout(t *testing.T) {
 	cfg, err := parseFlags([]string{
 		"-output-vuln-json", "dist/vuln.json",
 		"-vuln-mode", "full",
+		"-npm-registry-base-url", "https://npm.example.test",
+		"-nuget-registration-base-url", "https://nuget.example.test",
 		"-github-advisory-base-url", "https://github.example.test",
+		"-github-advisory-token", "ghs_test",
 		"-nvd-base-url", "https://nvd.example.test",
+		"-nvd-api-key", "nvd_test",
+		"-http-cache-mode", "cache-only",
+		"-http-cache-dir", filepath.Join("dist", "http-cache"),
+		"-http-cache-ttl", "48h",
 		"-timeout-seconds", "42",
 	})
 	if err != nil {
@@ -123,11 +131,35 @@ func TestParseFlagsKeepsExplicitVulnerabilityModeAndTimeout(t *testing.T) {
 	if cfg.timeout != 42*time.Second {
 		t.Fatalf("unexpected timeout: %v", cfg.timeout)
 	}
+	if cfg.npmRegistryBaseURL != "https://npm.example.test" {
+		t.Fatalf("unexpected npm registry base url: %q", cfg.npmRegistryBaseURL)
+	}
+	if cfg.nugetRegistrationURL != "https://nuget.example.test" {
+		t.Fatalf("unexpected nuget registration base url: %q", cfg.nugetRegistrationURL)
+	}
 	if cfg.gitHubAdvisoryBaseURL != "https://github.example.test" {
 		t.Fatalf("unexpected github advisory base url: %q", cfg.gitHubAdvisoryBaseURL)
 	}
+	if cfg.gitHubAdvisoryToken != "ghs_test" {
+		t.Fatalf("unexpected github advisory token: %q", cfg.gitHubAdvisoryToken)
+	}
 	if cfg.nvdBaseURL != "https://nvd.example.test" {
 		t.Fatalf("unexpected nvd base url: %q", cfg.nvdBaseURL)
+	}
+	if cfg.nvdAPIKey != "nvd_test" {
+		t.Fatalf("unexpected nvd api key: %q", cfg.nvdAPIKey)
+	}
+	if cfg.httpCacheMode != "cache-only" {
+		t.Fatalf("unexpected http cache mode: %q", cfg.httpCacheMode)
+	}
+	if cfg.httpCacheDir != filepath.Join("dist", "http-cache") {
+		t.Fatalf("unexpected http cache dir: %q", cfg.httpCacheDir)
+	}
+	if cfg.httpCacheTTL != 48*time.Hour {
+		t.Fatalf("unexpected http cache ttl: %v", cfg.httpCacheTTL)
+	}
+	if cfg.maxPackageArtifactBytes != 268435456 || cfg.maxPackageMetadataBytes != 1048576 || cfg.maxEmbeddedLicenseBytes != 4194304 || cfg.maxPackageArchiveEntries != 10000 {
+		t.Fatalf("unexpected artifact read limits: %#v", cfg)
 	}
 }
 
@@ -136,6 +168,84 @@ func TestParseFlagsRejectsVulnerabilityModeWithoutOutputs(t *testing.T) {
 
 	if _, err := parseFlags([]string{"-vuln-mode", "full"}); err == nil {
 		t.Fatal("expected vulnerability mode validation error")
+	}
+}
+
+func TestParseFlagsLoadsAPISecretsFromEnvironment(t *testing.T) {
+	t.Setenv("DEPAUDIT_LICENSE_GITHUB_ADVISORY_TOKEN", "env-github-token")
+	t.Setenv("DEPAUDIT_LICENSE_NVD_API_KEY", "env-nvd-key")
+
+	cfg, err := parseFlags([]string{"-output-vuln-json", "dist/vuln.json"})
+	if err != nil {
+		t.Fatalf("parse flags: %v", err)
+	}
+	if cfg.gitHubAdvisoryToken != "env-github-token" {
+		t.Fatalf("github token = %q", cfg.gitHubAdvisoryToken)
+	}
+	if cfg.nvdAPIKey != "env-nvd-key" {
+		t.Fatalf("nvd api key = %q", cfg.nvdAPIKey)
+	}
+}
+
+func TestParseFlagsRejectsInvalidHTTPCacheConfig(t *testing.T) {
+	t.Parallel()
+
+	if _, err := parseFlags([]string{"-http-cache-mode", "weird"}); err == nil {
+		t.Fatal("expected invalid http cache mode error")
+	}
+	if _, err := parseFlags([]string{"-http-cache-ttl", "-1s"}); err == nil {
+		t.Fatal("expected invalid http cache ttl error")
+	}
+}
+
+func TestParseFlagsRejectsInvalidArtifactReadLimits(t *testing.T) {
+	t.Parallel()
+
+	if _, err := parseFlags([]string{"-max-package-artifact-bytes", "0"}); err == nil {
+		t.Fatal("expected invalid package artifact byte limit")
+	}
+	if _, err := parseFlags([]string{"-max-package-metadata-bytes", "-1"}); err == nil {
+		t.Fatal("expected invalid package metadata byte limit")
+	}
+	if _, err := parseFlags([]string{"-max-embedded-license-bytes", "0"}); err == nil {
+		t.Fatal("expected invalid embedded license byte limit")
+	}
+	if _, err := parseFlags([]string{"-max-package-archive-entries", "0"}); err == nil {
+		t.Fatal("expected invalid package archive entry limit")
+	}
+}
+
+func TestConfiguredExternalSourcesUsesConfiguredEndpoints(t *testing.T) {
+	t.Parallel()
+
+	sources := configuredExternalSources(config{
+		httpCacheMode:         "use",
+		httpCacheTTL:          48 * time.Hour,
+		npmRegistryBaseURL:    "https://npm.example.test",
+		nugetRegistrationURL:  "https://nuget.example.test",
+		vulnMode:              "full",
+		osvBaseURL:            "https://osv.example.test",
+		gitHubAdvisoryBaseURL: "https://github.example.test",
+		gitHubAdvisoryToken:   "token",
+		nvdBaseURL:            "https://nvd.example.test",
+		nvdAPIKey:             "key",
+	})
+
+	gotIDs := make([]string, 0, len(sources))
+	for _, source := range sources {
+		gotIDs = append(gotIDs, source.ID)
+	}
+	if !slices.Equal(gotIDs, []string{"npm-registry", "nuget-registration", "github-advisory", "nvd", "osv"}) {
+		t.Fatalf("external sources = %#v", sources)
+	}
+	if sources[2].BaseURL != "https://github.example.test" || !sources[2].AuthConfigured {
+		t.Fatalf("github advisory source = %#v", sources[2])
+	}
+	if sources[3].BaseURL != "https://nvd.example.test" || !sources[3].AuthConfigured {
+		t.Fatalf("nvd source = %#v", sources[3])
+	}
+	if sources[0].CacheMode != "use" || sources[0].CacheTTL != "48h0m0s" {
+		t.Fatalf("cache settings = %#v", sources[0])
 	}
 }
 
@@ -266,21 +376,6 @@ func TestParseFlagsRejectsMissingLicenseOverrideFile(t *testing.T) {
 	}
 }
 
-func TestParseFlagsSynthesizesLegacyExcludePatternsIntoPolicy(t *testing.T) {
-	t.Parallel()
-
-	cfg, err := parseFlags([]string{"-exclude-patterns", "eslint, webpack"})
-	if err != nil {
-		t.Fatalf("parse flags: %v", err)
-	}
-	if len(cfg.excludePatterns) != 2 {
-		t.Fatalf("unexpected exclude patterns: %#v", cfg.excludePatterns)
-	}
-	if len(cfg.excludePolicy.ShallowExcludes) != 1 {
-		t.Fatalf("expected synthesized shallow rule, got %d", len(cfg.excludePolicy.ShallowExcludes))
-	}
-}
-
 func TestParseFlagsRejectsInvalidExcludePolicy(t *testing.T) {
 	t.Parallel()
 
@@ -378,21 +473,18 @@ func TestResolveAssetPathsReturnsErrorWhenAnyAssetIsMissing(t *testing.T) {
 func TestHelperFunctions(t *testing.T) {
 	t.Parallel()
 
-	if got := splitPatterns(" React, vite ,,TEST "); len(got) != 3 || got[0] != "react" || got[2] != "test" {
-		t.Fatalf("splitPatterns = %#v", got)
-	}
 	if !exists("configs") {
 		t.Fatal("expected configs to exist")
 	}
 	if got := normalizeDisplayLocation(`.\testdata\..\configs\licenses.json`); got != filepath.Clean(`.\testdata\..\configs\licenses.json`) {
 		t.Fatalf("normalizeDisplayLocation = %q", got)
 	}
-	roots := repositoryScanRoots([]input.SourceSpec{
-		{Kind: input.InputKindRepositoryScan, Location: `D:\repo`},
-		{Kind: input.InputKindCycloneDXJSON, Location: `D:\repo\bom.json`},
-	})
+	roots := sourceLocalRepositoryRoots(input.SourceSpec{Kind: input.InputKindRepositoryScan, Location: `D:\repo`})
 	if len(roots) != 1 || roots[0] != `D:\repo` {
 		t.Fatalf("repository roots = %#v", roots)
+	}
+	if got := sourceLocalRepositoryRoots(input.SourceSpec{Kind: input.InputKindCycloneDXJSON, Location: `D:\repo\bom.json`}); got != nil {
+		t.Fatalf("non-repository-scan roots = %#v", got)
 	}
 }
 

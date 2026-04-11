@@ -1,6 +1,7 @@
 package scan
 
 import (
+	"fmt"
 	"net/http"
 	"path/filepath"
 	"slices"
@@ -12,6 +13,12 @@ import (
 
 const MetadataEnrichmentSourceKind = "metadata-enrichment"
 
+const (
+	MetadataLookupModeFull   = "full"
+	MetadataLookupModeLocal  = "local"
+	MetadataLookupModeRemote = "remote"
+)
+
 type MetadataLookupConfig struct {
 	Client                   *http.Client
 	Catalog                  *catalog.Catalog
@@ -19,6 +26,8 @@ type MetadataLookupConfig struct {
 	NodeRegistryBaseURL      string
 	NuGetGlobalPackagesRoot  string
 	NuGetRegistrationBaseURL string
+	ArtifactReadLimits       ArtifactReadLimits
+	Mode                     string
 }
 
 type MetadataLookupService struct {
@@ -26,30 +35,45 @@ type MetadataLookupService struct {
 	repositoryRoots []string
 	node            *nodeResolver
 	nuget           *nugetResolver
+	mode            string
 }
 
-func NewMetadataLookupService(cfg MetadataLookupConfig) *MetadataLookupService {
+func NewMetadataLookupService(cfg MetadataLookupConfig) (*MetadataLookupService, error) {
+	mode := strings.ToLower(strings.TrimSpace(cfg.Mode))
+	switch mode {
+	case MetadataLookupModeFull, MetadataLookupModeLocal, MetadataLookupModeRemote:
+	case "":
+		return nil, fmt.Errorf("metadata lookup mode is required")
+	default:
+		return nil, fmt.Errorf("unsupported metadata lookup mode %q", cfg.Mode)
+	}
 	return &MetadataLookupService{
 		catalog:         cfg.Catalog,
 		repositoryRoots: normalizeRoots(cfg.RepositoryRoots),
 		node: &nodeResolver{
-			client:          cfg.Client,
-			cache:           map[string]metadata{},
-			registryBaseURL: cfg.NodeRegistryBaseURL,
+			client:             cfg.Client,
+			cache:              map[string]metadata{},
+			registryBaseURL:    cfg.NodeRegistryBaseURL,
+			artifactReadLimits: cfg.ArtifactReadLimits,
 		},
 		nuget: &nugetResolver{
 			client:              cfg.Client,
 			cache:               map[string]metadata{},
 			globalPackagesRoot:  cfg.NuGetGlobalPackagesRoot,
 			registrationBaseURL: cfg.NuGetRegistrationBaseURL,
+			artifactReadLimits:  cfg.ArtifactReadLimits,
 		},
-	}
+		mode: mode,
+	}, nil
 }
 
-func (s *MetadataLookupService) EnrichPackage(pkg inventory.Package) (inventory.Package, *inventory.Source, bool) {
-	meta, ok := s.lookupMetadata(pkg)
+func (s *MetadataLookupService) EnrichPackage(pkg inventory.Package) (inventory.Package, *inventory.Source, bool, error) {
+	meta, ok, err := s.lookupMetadata(pkg)
+	if err != nil {
+		return pkg, nil, false, err
+	}
 	if !ok {
-		return pkg, nil, false
+		return pkg, nil, false, nil
 	}
 
 	source := inventory.Source{
@@ -57,28 +81,62 @@ func (s *MetadataLookupService) EnrichPackage(pkg inventory.Package) (inventory.
 		Kind:     MetadataEnrichmentSourceKind,
 		Location: strings.TrimSpace(meta.Source),
 	}
-	enriched, changed := applyMetadata(pkg, meta, s.catalog, source.ID)
+	enriched, changed, sourceChanged := applyMetadata(pkg, meta, s.catalog, source.ID)
 	if !changed {
-		return pkg, nil, false
+		return pkg, nil, false, nil
 	}
-	return enriched, &source, true
+	if !sourceChanged {
+		return enriched, nil, true, nil
+	}
+	return enriched, &source, true, nil
 }
 
-func (s *MetadataLookupService) lookupMetadata(pkg inventory.Package) (metadata, bool) {
+func (s *MetadataLookupService) lookupMetadata(pkg inventory.Package) (metadata, bool, error) {
 	switch strings.ToLower(strings.TrimSpace(pkg.Ecosystem)) {
 	case "node":
-		for _, projectDir := range s.nodeProjectDirs(pkg) {
-			if meta, ok := s.node.resolveFromInstalledPackage(pkg.Name, pkg.Version, projectDir); ok {
-				return meta, true
+		if s.mode != MetadataLookupModeRemote {
+			for _, projectDir := range s.nodeProjectDirs(pkg) {
+				if meta, ok, err := s.node.resolveFromInstalledPackage(pkg.Name, pkg.Version, projectDir); err != nil {
+					return metadata{}, false, err
+				} else if ok {
+					return meta, true, nil
+				}
 			}
 		}
-		meta := s.node.resolve(pkg.Name, pkg.Version, "")
-		return meta, strings.TrimSpace(meta.Source) != "" && meta.Source != "fallback"
+		if s.mode == MetadataLookupModeLocal {
+			return metadata{}, false, nil
+		}
+		meta, err := s.node.resolveRemote(pkg.Name, pkg.Version)
+		if err != nil {
+			return metadata{}, false, err
+		}
+		return meta, strings.TrimSpace(meta.Source) != "" && meta.Source != "fallback", nil
 	case "dotnet":
-		meta := s.nuget.resolve(pkg.Name, pkg.Version)
-		return meta, strings.TrimSpace(meta.Source) != "" && meta.Source != "fallback"
+		if s.mode != MetadataLookupModeRemote {
+			if meta, ok, err := s.nuget.resolveFromGlobalPackages(pkg.Name, pkg.Version); err != nil {
+				return metadata{}, false, err
+			} else if ok {
+				return meta, true, nil
+			}
+		}
+		if s.mode == MetadataLookupModeLocal {
+			return metadata{}, false, nil
+		}
+		meta, ok, err := s.nuget.resolveFromRegistration(pkg.Name, pkg.Version)
+		if err != nil {
+			return metadata{}, false, err
+		}
+		if ok {
+			return meta, true, nil
+		}
+		return metadata{
+			RawLicense: "Unknown",
+			Holder:     pkg.Name,
+			Year:       now().Year(),
+			Source:     "fallback",
+		}, false, nil
 	default:
-		return metadata{}, false
+		return metadata{}, false, nil
 	}
 }
 
@@ -94,8 +152,9 @@ func (s *MetadataLookupService) nodeProjectDirs(pkg inventory.Package) []string 
 	return uniqueNonEmpty(dirs)
 }
 
-func applyMetadata(pkg inventory.Package, meta metadata, cat *catalog.Catalog, sourceID string) (inventory.Package, bool) {
+func applyMetadata(pkg inventory.Package, meta metadata, cat *catalog.Catalog, sourceID string) (inventory.Package, bool, bool) {
 	changed := false
+	sourceChanged := false
 	if pkg.Provenance.FieldOrigins == nil {
 		pkg.Provenance.FieldOrigins = map[string]string{}
 	}
@@ -104,45 +163,58 @@ func applyMetadata(pkg inventory.Package, meta metadata, cat *catalog.Catalog, s
 		pkg.RawLicense = strings.TrimSpace(meta.RawLicense)
 		pkg.Provenance.FieldOrigins["rawLicense"] = sourceID
 		changed = true
+		sourceChanged = true
 	}
 	if isMissingLicenseKey(pkg.LicenseKey, cat) {
 		if key := resolveLicenseKeyFromMetadata(pkg, meta, cat); key != "" {
 			pkg.LicenseKey = key
 			pkg.Provenance.FieldOrigins["licenseKey"] = sourceID
 			changed = true
+			sourceChanged = true
 		}
 	}
 	if strings.TrimSpace(pkg.Repository) == "" && strings.TrimSpace(meta.Repository) != "" {
 		pkg.Repository = strings.TrimSpace(meta.Repository)
 		pkg.Provenance.FieldOrigins["repository"] = sourceID
 		changed = true
+		sourceChanged = true
 	}
 	if strings.TrimSpace(pkg.Homepage) == "" && strings.TrimSpace(meta.Homepage) != "" {
 		pkg.Homepage = strings.TrimSpace(meta.Homepage)
 		pkg.Provenance.FieldOrigins["homepage"] = sourceID
 		changed = true
+		sourceChanged = true
 	}
 	if strings.TrimSpace(pkg.CopyrightHolder) == "" && strings.TrimSpace(meta.Holder) != "" {
 		pkg.CopyrightHolder = strings.TrimSpace(meta.Holder)
 		pkg.Provenance.FieldOrigins["copyrightHolder"] = sourceID
 		changed = true
+		sourceChanged = true
 	}
 	if pkg.CopyrightYear == 0 && meta.Year != 0 {
 		pkg.CopyrightYear = meta.Year
 		pkg.Provenance.FieldOrigins["copyrightYear"] = sourceID
 		changed = true
+		sourceChanged = true
 	}
 	if strings.TrimSpace(pkg.EmbeddedLicensePath) == "" && strings.TrimSpace(meta.EmbeddedLicensePath) != "" {
 		pkg.EmbeddedLicensePath = strings.TrimSpace(meta.EmbeddedLicensePath)
 		pkg.Provenance.FieldOrigins["embeddedLicensePath"] = sourceID
 		changed = true
+		sourceChanged = true
 	}
 	if strings.TrimSpace(pkg.EmbeddedLicenseText) == "" && strings.TrimSpace(meta.EmbeddedLicenseText) != "" {
 		pkg.EmbeddedLicenseText = strings.TrimSpace(meta.EmbeddedLicenseText)
 		pkg.Provenance.FieldOrigins["embeddedLicenseText"] = sourceID
 		changed = true
+		sourceChanged = true
 	}
-	if changed {
+	if pkg.Provenance.ArtifactResolution == nil && meta.ArtifactResolution != nil {
+		resolution := *meta.ArtifactResolution
+		pkg.Provenance.ArtifactResolution = &resolution
+		changed = true
+	}
+	if sourceChanged {
 		switch current := strings.TrimSpace(pkg.MetadataSource); {
 		case current == "":
 			pkg.MetadataSource = strings.TrimSpace(meta.Source)
@@ -152,7 +224,7 @@ func applyMetadata(pkg inventory.Package, meta metadata, cat *catalog.Catalog, s
 		pkg.Provenance.FieldOrigins["metadataSource"] = sourceID
 		pkg.Provenance.SourceIDs = uniqueNonEmpty(append(pkg.Provenance.SourceIDs, sourceID))
 	}
-	return pkg, changed
+	return pkg, changed, sourceChanged
 }
 
 func resolveLicenseKeyFromMetadata(pkg inventory.Package, meta metadata, cat *catalog.Catalog) string {

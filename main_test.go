@@ -477,12 +477,12 @@ func TestHelperFunctions(t *testing.T) {
 	if got := normalizeDisplayLocation(`.\testdata\..\configs\licenses.json`); got != filepath.Clean(`.\testdata\..\configs\licenses.json`) {
 		t.Fatalf("normalizeDisplayLocation = %q", got)
 	}
-	roots := repositoryScanRoots([]input.SourceSpec{
-		{Kind: input.InputKindRepositoryScan, Location: `D:\repo`},
-		{Kind: input.InputKindCycloneDXJSON, Location: `D:\repo\bom.json`},
-	})
+	roots := sourceLocalRepositoryRoots(input.SourceSpec{Kind: input.InputKindRepositoryScan, Location: `D:\repo`})
 	if len(roots) != 1 || roots[0] != `D:\repo` {
 		t.Fatalf("repository roots = %#v", roots)
+	}
+	if got := sourceLocalRepositoryRoots(input.SourceSpec{Kind: input.InputKindCycloneDXJSON, Location: `D:\repo\bom.json`}); got != nil {
+		t.Fatalf("non-repository-scan roots = %#v", got)
 	}
 }
 

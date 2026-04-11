@@ -158,17 +158,21 @@ func run(args []string, stdout io.Writer) error {
 
 	inputResult, err := input.Load(input.LoadConfig{
 		Sources:       cfg.inputs,
-		Client:        baseClient,
 		Catalog:       cat,
 		SubgraphRules: cfg.excludePolicy.SubgraphExcludes,
+		BeforeMerge: func(source input.SourceSpec, doc inventory.Document) (inventory.Document, error) {
+			return enrich.ApplyLocal(enrich.Config{
+				Catalog:         cat,
+				RepositoryRoots: sourceLocalRepositoryRoots(source),
+			}, doc)
+		},
 	})
 	if err != nil {
 		return err
 	}
-	inputResult.Document, err = enrich.Apply(enrich.Config{
+	inputResult.Document, err = enrich.ApplyRemote(enrich.Config{
 		Client:                   cachedClient,
 		Catalog:                  cat,
-		RepositoryRoots:          repositoryScanRoots(cfg.inputs),
 		NodeRegistryBaseURL:      cfg.npmRegistryBaseURL,
 		NuGetRegistrationBaseURL: cfg.nugetRegistrationURL,
 	}, inputResult.Document)
@@ -685,14 +689,14 @@ func normalizeDisplayLocation(pathValue string) string {
 	return filepath.Clean(pathValue)
 }
 
-func repositoryScanRoots(inputs []input.SourceSpec) []string {
-	roots := make([]string, 0, len(inputs))
-	for _, source := range inputs {
-		if source.Kind == input.InputKindRepositoryScan {
-			roots = append(roots, source.Location)
-		}
+func sourceLocalRepositoryRoots(source input.SourceSpec) []string {
+	if source.Kind != input.InputKindRepositoryScan {
+		return nil
 	}
-	return roots
+	if strings.TrimSpace(source.Location) == "" {
+		return nil
+	}
+	return []string{source.Location}
 }
 
 func exitOnError(err error) {

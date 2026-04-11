@@ -23,6 +23,22 @@ func (r *nodeResolver) resolve(packageName string, version string, projectDir st
 		return cached
 	}
 
+	if local, ok := r.resolveFromInstalledPackage(packageName, version, projectDir); ok {
+		r.cache[cacheKey] = local
+		return local
+	}
+
+	remote := r.resolveRemote(packageName, version)
+	r.cache[cacheKey] = remote
+	return remote
+}
+
+func (r *nodeResolver) resolveRemote(packageName string, version string) metadata {
+	cacheKey := makeNodePackageKey(packageName, version)
+	if cached, ok := r.cache[cacheKey]; ok {
+		return cached
+	}
+
 	meta := metadata{
 		RawLicense: "Unknown",
 		Holder:     packageName,
@@ -30,17 +46,10 @@ func (r *nodeResolver) resolve(packageName string, version string, projectDir st
 		Source:     "fallback",
 	}
 
-	if local, ok := r.resolveFromInstalledPackage(packageName, version, projectDir); ok {
-		r.cache[cacheKey] = local
-		return local
-	}
-
 	if !isExactNodeVersion(version) {
-		r.cache[cacheKey] = meta
 		return meta
 	}
 	if r.client == nil {
-		r.cache[cacheKey] = meta
 		return meta
 	}
 
@@ -52,13 +61,11 @@ func (r *nodeResolver) resolve(packageName string, version string, projectDir st
 		BaseURL: firstNonEmpty(r.registryBaseURL, DefaultNodeRegistryBaseURL),
 	})
 	if err != nil {
-		r.cache[cacheKey] = meta
 		return meta
 	}
 
 	var versionPayload npmVersionPayload
 	if err := json.Unmarshal(body, &versionPayload); err != nil {
-		r.cache[cacheKey] = meta
 		return meta
 	}
 
@@ -82,8 +89,6 @@ func (r *nodeResolver) resolve(packageName string, version string, projectDir st
 		ReviewRequired: true,
 		ReviewReason:   "local-package-manager-artifact-not-available",
 	}
-
-	r.cache[cacheKey] = meta
 	return meta
 }
 

@@ -103,6 +103,7 @@ func mergePackage(base inventory.Package, incoming inventory.Package) (inventory
 	merged.Provenance.SourceIDs = uniqueSorted(append(append([]string(nil), base.Provenance.SourceIDs...), incoming.Provenance.SourceIDs...))
 	merged.Provenance.FieldOrigins = cloneFieldOrigins(base.Provenance.FieldOrigins)
 	merged.Provenance.ConflictFields = uniqueSorted(append([]string(nil), base.Provenance.ConflictFields...))
+	merged.Provenance.ArtifactResolution = mergeArtifactResolution(base.Provenance.ArtifactResolution, incoming.Provenance.ArtifactResolution)
 
 	var conflicts []inventory.Conflict
 	conflicts = append(conflicts, mergeStringField(primaryKey(base), "project", &merged.Project, &merged.Provenance, base.Project, incoming.Project, base, incoming)...)
@@ -170,6 +171,7 @@ func normalizePackage(pkg inventory.Package) inventory.Package {
 	pkg.Provenance.SourceIDs = uniqueSorted(pkg.Provenance.SourceIDs)
 	pkg.Provenance.ConflictFields = uniqueSorted(pkg.Provenance.ConflictFields)
 	pkg.Provenance.FieldOrigins = cloneFieldOrigins(pkg.Provenance.FieldOrigins)
+	pkg.Provenance.ArtifactResolution = cloneArtifactResolution(pkg.Provenance.ArtifactResolution)
 	pkg.Ecosystem = strings.TrimSpace(pkg.Ecosystem)
 	pkg.Project = strings.TrimSpace(pkg.Project)
 	pkg.Name = strings.TrimSpace(pkg.Name)
@@ -185,6 +187,59 @@ func normalizePackage(pkg inventory.Package) inventory.Package {
 	pkg.EmbeddedLicensePath = strings.TrimSpace(pkg.EmbeddedLicensePath)
 	pkg.EmbeddedLicenseText = strings.TrimSpace(pkg.EmbeddedLicenseText)
 	return pkg
+}
+
+func mergeArtifactResolution(base *inventory.ArtifactResolution, incoming *inventory.ArtifactResolution) *inventory.ArtifactResolution {
+	switch {
+	case base == nil:
+		return cloneArtifactResolution(incoming)
+	case incoming == nil:
+		return cloneArtifactResolution(base)
+	}
+
+	baseRank := artifactResolutionRank(base)
+	incomingRank := artifactResolutionRank(incoming)
+	switch {
+	case incomingRank > baseRank:
+		return cloneArtifactResolution(incoming)
+	case baseRank > incomingRank:
+		return cloneArtifactResolution(base)
+	case base.ReviewRequired && !incoming.ReviewRequired:
+		return cloneArtifactResolution(incoming)
+	case !base.ReviewRequired && incoming.ReviewRequired:
+		return cloneArtifactResolution(base)
+	case strings.TrimSpace(base.Detail) == "" && strings.TrimSpace(incoming.Detail) != "":
+		return cloneArtifactResolution(incoming)
+	case strings.TrimSpace(base.ReviewReason) == "" && strings.TrimSpace(incoming.ReviewReason) != "":
+		return cloneArtifactResolution(incoming)
+	default:
+		return cloneArtifactResolution(base)
+	}
+}
+
+func artifactResolutionRank(value *inventory.ArtifactResolution) int {
+	if value == nil {
+		return -1
+	}
+
+	switch strings.TrimSpace(value.Kind) {
+	case "local-package-manager":
+		return 3
+	case "remote-package-content":
+		return 2
+	case "remote-metadata":
+		return 1
+	default:
+		return 0
+	}
+}
+
+func cloneArtifactResolution(value *inventory.ArtifactResolution) *inventory.ArtifactResolution {
+	if value == nil {
+		return nil
+	}
+	cloned := *value
+	return &cloned
 }
 
 func primaryKey(pkg inventory.Package) string {

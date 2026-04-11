@@ -1,6 +1,7 @@
 package scan
 
 import (
+	"fmt"
 	"net/http"
 	"path/filepath"
 	"slices"
@@ -12,6 +13,12 @@ import (
 
 const MetadataEnrichmentSourceKind = "metadata-enrichment"
 
+const (
+	MetadataLookupModeFull   = "full"
+	MetadataLookupModeLocal  = "local"
+	MetadataLookupModeRemote = "remote"
+)
+
 type MetadataLookupConfig struct {
 	Client                   *http.Client
 	Catalog                  *catalog.Catalog
@@ -19,6 +26,7 @@ type MetadataLookupConfig struct {
 	NodeRegistryBaseURL      string
 	NuGetGlobalPackagesRoot  string
 	NuGetRegistrationBaseURL string
+	Mode                     string
 }
 
 type MetadataLookupService struct {
@@ -26,9 +34,18 @@ type MetadataLookupService struct {
 	repositoryRoots []string
 	node            *nodeResolver
 	nuget           *nugetResolver
+	mode            string
 }
 
-func NewMetadataLookupService(cfg MetadataLookupConfig) *MetadataLookupService {
+func NewMetadataLookupService(cfg MetadataLookupConfig) (*MetadataLookupService, error) {
+	mode := strings.ToLower(strings.TrimSpace(cfg.Mode))
+	switch mode {
+	case MetadataLookupModeFull, MetadataLookupModeLocal, MetadataLookupModeRemote:
+	case "":
+		return nil, fmt.Errorf("metadata lookup mode is required")
+	default:
+		return nil, fmt.Errorf("unsupported metadata lookup mode %q", cfg.Mode)
+	}
 	return &MetadataLookupService{
 		catalog:         cfg.Catalog,
 		repositoryRoots: normalizeRoots(cfg.RepositoryRoots),
@@ -43,7 +60,8 @@ func NewMetadataLookupService(cfg MetadataLookupConfig) *MetadataLookupService {
 			globalPackagesRoot:  cfg.NuGetGlobalPackagesRoot,
 			registrationBaseURL: cfg.NuGetRegistrationBaseURL,
 		},
-	}
+		mode: mode,
+	}, nil
 }
 
 func (s *MetadataLookupService) EnrichPackage(pkg inventory.Package) (inventory.Package, *inventory.Source, bool) {
@@ -70,16 +88,37 @@ func (s *MetadataLookupService) EnrichPackage(pkg inventory.Package) (inventory.
 func (s *MetadataLookupService) lookupMetadata(pkg inventory.Package) (metadata, bool) {
 	switch strings.ToLower(strings.TrimSpace(pkg.Ecosystem)) {
 	case "node":
-		for _, projectDir := range s.nodeProjectDirs(pkg) {
-			if meta, ok := s.node.resolveFromInstalledPackage(pkg.Name, pkg.Version, projectDir); ok {
+		if s.mode != MetadataLookupModeRemote {
+			for _, projectDir := range s.nodeProjectDirs(pkg) {
+				if meta, ok := s.node.resolveFromInstalledPackage(pkg.Name, pkg.Version, projectDir); ok {
+					return meta, true
+				}
+			}
+		}
+		if s.mode == MetadataLookupModeLocal {
+			return metadata{}, false
+		}
+		meta := s.node.resolveRemote(pkg.Name, pkg.Version)
+		return meta, strings.TrimSpace(meta.Source) != "" && meta.Source != "fallback"
+	case "dotnet":
+		if s.mode != MetadataLookupModeRemote {
+			if meta, ok := s.nuget.resolveFromGlobalPackages(pkg.Name, pkg.Version); ok {
 				return meta, true
 			}
 		}
-		meta := s.node.resolve(pkg.Name, pkg.Version, "")
-		return meta, strings.TrimSpace(meta.Source) != "" && meta.Source != "fallback"
-	case "dotnet":
-		meta := s.nuget.resolve(pkg.Name, pkg.Version)
-		return meta, strings.TrimSpace(meta.Source) != "" && meta.Source != "fallback"
+		if s.mode == MetadataLookupModeLocal {
+			return metadata{}, false
+		}
+		meta, ok := s.nuget.resolveFromRegistration(pkg.Name, pkg.Version)
+		if ok {
+			return meta, true
+		}
+		return metadata{
+			RawLicense: "Unknown",
+			Holder:     pkg.Name,
+			Year:       now().Year(),
+			Source:     "fallback",
+		}, false
 	default:
 		return metadata{}, false
 	}

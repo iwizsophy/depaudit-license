@@ -20,15 +20,27 @@ type Config struct {
 	NuGetRegistrationBaseURL string
 }
 
-func Apply(cfg Config, doc inventory.Document) (inventory.Document, error) {
-	service := scan.NewMetadataLookupService(scan.MetadataLookupConfig{
+func ApplyLocal(cfg Config, doc inventory.Document) (inventory.Document, error) {
+	return applyWithMode(cfg, doc, scan.MetadataLookupModeLocal)
+}
+
+func ApplyRemote(cfg Config, doc inventory.Document) (inventory.Document, error) {
+	return applyWithMode(cfg, doc, scan.MetadataLookupModeRemote)
+}
+
+func applyWithMode(cfg Config, doc inventory.Document, mode string) (inventory.Document, error) {
+	service, err := scan.NewMetadataLookupService(scan.MetadataLookupConfig{
 		Client:                   cfg.Client,
 		Catalog:                  cfg.Catalog,
 		RepositoryRoots:          cfg.RepositoryRoots,
 		NodeRegistryBaseURL:      cfg.NodeRegistryBaseURL,
 		NuGetGlobalPackagesRoot:  cfg.NuGetGlobalPackagesRoot,
 		NuGetRegistrationBaseURL: cfg.NuGetRegistrationBaseURL,
+		Mode:                     mode,
 	})
+	if err != nil {
+		return inventory.Document{}, err
+	}
 
 	result := cloneDocument(doc)
 

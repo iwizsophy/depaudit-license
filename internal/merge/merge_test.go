@@ -126,6 +126,64 @@ func TestMergePackageHelperBranches(t *testing.T) {
 	if merged.MetadataSource != "repo-scan" {
 		t.Fatalf("metadata source should preserve base when incoming empty: %q", merged.MetadataSource)
 	}
+
+	base.Provenance.ArtifactResolution = &inventory.ArtifactResolution{
+		Kind:           "remote-metadata",
+		Detail:         "npm-registry-version",
+		ReviewRequired: true,
+		ReviewReason:   "local-package-manager-artifact-not-available",
+	}
+	incoming.Provenance.ArtifactResolution = &inventory.ArtifactResolution{
+		Kind:   "local-package-manager",
+		Detail: "node-modules",
+	}
+
+	merged, conflicts = mergePackage(base, incoming)
+	if len(conflicts) != 1 || conflicts[0].Field != "copyrightYear" {
+		t.Fatalf("copyright conflict = %#v", conflicts)
+	}
+	if merged.Provenance.ArtifactResolution == nil || merged.Provenance.ArtifactResolution.Kind != "local-package-manager" || merged.Provenance.ArtifactResolution.Detail != "node-modules" || merged.Provenance.ArtifactResolution.ReviewRequired {
+		t.Fatalf("artifact resolution = %#v", merged.Provenance.ArtifactResolution)
+	}
+}
+
+func TestDocumentsPreserveIncomingArtifactResolutionWhenBaseLacksIt(t *testing.T) {
+	t.Parallel()
+
+	docA := inventory.Document{
+		Sources: []inventory.Source{{ID: "sbom"}},
+		Packages: []inventory.Package{{
+			Ecosystem: "node",
+			Project:   "web",
+			Name:      "react",
+			Version:   "18.2.0",
+			Provenance: inventory.PackageProvenance{
+				SourceIDs: []string{"sbom"},
+			},
+		}},
+	}
+	docB := inventory.Document{
+		Sources: []inventory.Source{{ID: "repo"}},
+		Packages: []inventory.Package{{
+			Ecosystem: "node",
+			Project:   "web",
+			Name:      "react",
+			Version:   "18.2.0",
+			Provenance: inventory.PackageProvenance{
+				SourceIDs: []string{"repo"},
+				ArtifactResolution: &inventory.ArtifactResolution{
+					Kind:   "local-package-manager",
+					Detail: "node-modules",
+				},
+			},
+		}},
+	}
+
+	merged := Documents(Config{}, docA, docB)
+	react := findPackage(t, merged.Packages, "react")
+	if react.Provenance.ArtifactResolution == nil || react.Provenance.ArtifactResolution.Kind != "local-package-manager" || react.Provenance.ArtifactResolution.Detail != "node-modules" {
+		t.Fatalf("artifact resolution = %#v", react.Provenance.ArtifactResolution)
+	}
 }
 
 func TestMergeMetadataSourceHelperBranches(t *testing.T) {

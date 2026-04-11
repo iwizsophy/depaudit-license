@@ -15,6 +15,14 @@ import (
 	"depaudit-license/internal/inventory"
 )
 
+func applyAll(cfg Config, doc inventory.Document) (inventory.Document, error) {
+	result, err := ApplyLocal(cfg, doc)
+	if err != nil {
+		return inventory.Document{}, err
+	}
+	return ApplyRemote(cfg, result)
+}
+
 func TestApplyFillsMissingNodeMetadataWithoutOverwritingSBOMValues(t *testing.T) {
 	t.Parallel()
 
@@ -66,7 +74,7 @@ func TestApplyFillsMissingNodeMetadataWithoutOverwritingSBOMValues(t *testing.T)
 		}},
 	}
 
-	enriched, err := Apply(Config{
+	enriched, err := applyAll(Config{
 		Catalog:         cat,
 		RepositoryRoots: []string{root},
 	}, doc)
@@ -170,7 +178,7 @@ func TestApplyUsesRegistryAndGlobalPackagesForMissingMetadata(t *testing.T) {
 		},
 	}
 
-	enriched, err := Apply(Config{
+	enriched, err := applyAll(Config{
 		Client:                  server.Client(),
 		Catalog:                 cat,
 		NodeRegistryBaseURL:     server.URL,
@@ -271,7 +279,7 @@ func TestApplyMarksRemoteNuGetArtifactFallbackForReview(t *testing.T) {
 		}},
 	}
 
-	enriched, err := Apply(Config{
+	enriched, err := applyAll(Config{
 		Client:                   server.Client(),
 		Catalog:                  cat,
 		NuGetGlobalPackagesRoot:  filepath.Join(t.TempDir(), "missing"),
@@ -342,7 +350,7 @@ func TestApplyMarksRemoteMetadataFallbackForReviewWithoutMetadataOverwrite(t *te
 		}},
 	}
 
-	enriched, err := Apply(Config{
+	enriched, err := applyAll(Config{
 		Client:              server.Client(),
 		Catalog:             cat,
 		NodeRegistryBaseURL: server.URL,
@@ -407,7 +415,7 @@ func TestApplyKeepsExistingEnrichmentSourceAndSortsSources(t *testing.T) {
 		}},
 	}
 
-	enriched, err := Apply(Config{
+	enriched, err := applyAll(Config{
 		Catalog:         cat,
 		RepositoryRoots: []string{root},
 	}, doc)
@@ -473,7 +481,7 @@ func TestApplyClonesDocumentBeforeMutatingEnrichedPackages(t *testing.T) {
 	originalPackage := doc.Packages[0]
 	originalConflicts := append([]inventory.ConflictValue(nil), doc.Conflicts[0].Values...)
 
-	enriched, err := Apply(Config{
+	enriched, err := applyAll(Config{
 		Catalog:         cat,
 		RepositoryRoots: []string{root},
 	}, doc)
@@ -554,7 +562,7 @@ func TestApplyRegistersSharedEnrichmentSourceOnce(t *testing.T) {
 		},
 	}
 
-	enriched, err := Apply(Config{
+	enriched, err := applyAll(Config{
 		Catalog:         cat,
 		RepositoryRoots: []string{root},
 	}, doc)
@@ -594,7 +602,7 @@ func TestApplyWithoutMetadataChangePreservesDocument(t *testing.T) {
 		}},
 	}
 
-	enriched, err := Apply(Config{}, doc)
+	enriched, err := applyAll(Config{}, doc)
 	if err != nil {
 		t.Fatalf("apply enrichment: %v", err)
 	}

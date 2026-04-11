@@ -14,6 +14,16 @@ import (
 	"depaudit-license/internal/inventory"
 )
 
+func mustNewMetadataLookupService(t *testing.T, cfg MetadataLookupConfig) *MetadataLookupService {
+	t.Helper()
+
+	service, err := NewMetadataLookupService(cfg)
+	if err != nil {
+		t.Fatalf("new metadata lookup service: %v", err)
+	}
+	return service
+}
+
 func TestMetadataLookupServiceEnrichPackageUsesInstalledNodeMetadata(t *testing.T) {
 	t.Parallel()
 
@@ -38,9 +48,10 @@ func TestMetadataLookupServiceEnrichPackageUsesInstalledNodeMetadata(t *testing.
 		t.Fatalf("load catalog: %v", err)
 	}
 
-	service := NewMetadataLookupService(MetadataLookupConfig{
+	service := mustNewMetadataLookupService(t, MetadataLookupConfig{
 		Catalog:         cat,
 		RepositoryRoots: []string{filepath.Join(root, "web"), filepath.Join(root, "web")},
+		Mode:            MetadataLookupModeFull,
 	})
 	pkg, source, changed := service.EnrichPackage(inventory.Package{
 		Ecosystem:  "node",
@@ -77,8 +88,9 @@ func TestMetadataLookupServiceEnrichPackageUsesInstalledNodeMetadata(t *testing.
 func TestMetadataLookupServiceNodeProjectDirsDeduplicatesRoots(t *testing.T) {
 	t.Parallel()
 
-	service := NewMetadataLookupService(MetadataLookupConfig{
+	service := mustNewMetadataLookupService(t, MetadataLookupConfig{
 		RepositoryRoots: []string{"/repo", "/repo", "/repo-alt"},
+		Mode:            MetadataLookupModeFull,
 	})
 	dirs := service.nodeProjectDirs(inventory.Package{Project: "web"})
 	expected := []string{filepath.Clean("/repo"), filepath.Clean("/repo-alt"), filepath.Join("/repo", "web"), filepath.Join("/repo-alt", "web")}
@@ -146,9 +158,10 @@ func TestMetadataLookupServiceFallbacks(t *testing.T) {
 		t.Fatalf("load catalog: %v", err)
 	}
 
-	service := NewMetadataLookupService(MetadataLookupConfig{
+	service := mustNewMetadataLookupService(t, MetadataLookupConfig{
 		Catalog:         cat,
 		RepositoryRoots: []string{"", " /repo ", "/repo"},
+		Mode:            MetadataLookupModeFull,
 	})
 	if _, _, changed := service.EnrichPackage(inventory.Package{
 		Ecosystem: "generic",
@@ -209,9 +222,10 @@ func TestMetadataLookupServiceEnrichPackageReturnsNoSourceWhenNoChangesApply(t *
 		t.Fatalf("load catalog: %v", err)
 	}
 
-	service := NewMetadataLookupService(MetadataLookupConfig{
+	service := mustNewMetadataLookupService(t, MetadataLookupConfig{
 		Catalog:         cat,
 		RepositoryRoots: []string{filepath.Join(root, "web")},
+		Mode:            MetadataLookupModeFull,
 	})
 	original := inventory.Package{
 		Ecosystem:       "node",
@@ -275,10 +289,11 @@ func TestMetadataLookupServiceLookupBranches(t *testing.T) {
 		t.Fatalf("load catalog: %v", err)
 	}
 
-	service := NewMetadataLookupService(MetadataLookupConfig{
+	service := mustNewMetadataLookupService(t, MetadataLookupConfig{
 		Client:              server.Client(),
 		Catalog:             cat,
 		NodeRegistryBaseURL: server.URL,
+		Mode:                MetadataLookupModeFull,
 	})
 
 	meta, ok := service.lookupMetadata(inventory.Package{
@@ -311,9 +326,10 @@ func TestMetadataLookupServiceLookupBranches(t *testing.T) {
 <package><metadata><authors>James Newton-King</authors><license type="expression">MIT</license></metadata></package>`), 0o644); err != nil {
 		t.Fatalf("write nuspec: %v", err)
 	}
-	service = NewMetadataLookupService(MetadataLookupConfig{
+	service = mustNewMetadataLookupService(t, MetadataLookupConfig{
 		Catalog:                 cat,
 		NuGetGlobalPackagesRoot: root,
+		Mode:                    MetadataLookupModeFull,
 	})
 	meta, ok = service.lookupMetadata(inventory.Package{
 		Ecosystem: "dotnet",
@@ -353,9 +369,10 @@ func TestMetadataLookupServiceEnrichPackageUsesDotNetMetadata(t *testing.T) {
 		t.Fatalf("load catalog: %v", err)
 	}
 
-	service := NewMetadataLookupService(MetadataLookupConfig{
+	service := mustNewMetadataLookupService(t, MetadataLookupConfig{
 		Catalog:                 cat,
 		NuGetGlobalPackagesRoot: root,
+		Mode:                    MetadataLookupModeFull,
 	})
 	pkg, source, changed := service.EnrichPackage(inventory.Package{
 		Ecosystem:  "dotnet",
@@ -409,9 +426,10 @@ func TestMetadataLookupServiceEnrichPackageResolvesNodeLicenseFileText(t *testin
 		t.Fatalf("load catalog: %v", err)
 	}
 
-	service := NewMetadataLookupService(MetadataLookupConfig{
+	service := mustNewMetadataLookupService(t, MetadataLookupConfig{
 		Catalog:         cat,
 		RepositoryRoots: []string{root},
+		Mode:            MetadataLookupModeFull,
 	})
 	pkg, _, changed := service.EnrichPackage(inventory.Package{
 		Ecosystem:  "node",
@@ -457,9 +475,10 @@ func TestMetadataLookupServiceEnrichPackageResolvesNuGetLicenseFileText(t *testi
 		t.Fatalf("load catalog: %v", err)
 	}
 
-	service := NewMetadataLookupService(MetadataLookupConfig{
+	service := mustNewMetadataLookupService(t, MetadataLookupConfig{
 		Catalog:                 cat,
 		NuGetGlobalPackagesRoot: root,
+		Mode:                    MetadataLookupModeFull,
 	})
 	pkg, _, changed := service.EnrichPackage(inventory.Package{
 		Ecosystem:  "dotnet",
@@ -614,8 +633,9 @@ func TestUniqueNonEmptyTrimsSortsAndDedupes(t *testing.T) {
 func TestMetadataLookupServiceNodeProjectDirsOmitsBlankProjectPaths(t *testing.T) {
 	t.Parallel()
 
-	service := NewMetadataLookupService(MetadataLookupConfig{
+	service := mustNewMetadataLookupService(t, MetadataLookupConfig{
 		RepositoryRoots: []string{"/repo-b", "/repo-a", "/repo-a"},
+		Mode:            MetadataLookupModeFull,
 	})
 	dirs := service.nodeProjectDirs(inventory.Package{})
 	if !slices.Equal(dirs, []string{"/repo-a", "/repo-b"}) {
@@ -626,7 +646,7 @@ func TestMetadataLookupServiceNodeProjectDirsOmitsBlankProjectPaths(t *testing.T
 func TestMetadataLookupServiceDotNetFallbackLookupReturnsNotFound(t *testing.T) {
 	t.Parallel()
 
-	service := NewMetadataLookupService(MetadataLookupConfig{})
+	service := mustNewMetadataLookupService(t, MetadataLookupConfig{Mode: MetadataLookupModeFull})
 	meta, ok := service.lookupMetadata(inventory.Package{
 		Ecosystem: "dotnet",
 		Name:      "Missing.Package",
@@ -634,5 +654,16 @@ func TestMetadataLookupServiceDotNetFallbackLookupReturnsNotFound(t *testing.T) 
 	})
 	if ok || meta.Source != "fallback" {
 		t.Fatalf("dotnet fallback lookup = %#v %v", meta, ok)
+	}
+}
+
+func TestNewMetadataLookupServiceRequiresExplicitMode(t *testing.T) {
+	t.Parallel()
+
+	if _, err := NewMetadataLookupService(MetadataLookupConfig{}); err == nil {
+		t.Fatal("expected mode validation error")
+	}
+	if _, err := NewMetadataLookupService(MetadataLookupConfig{Mode: "invalid"}); err == nil {
+		t.Fatal("expected invalid mode error")
 	}
 }

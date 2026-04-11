@@ -2,7 +2,6 @@ package input
 
 import (
 	"fmt"
-	"net/http"
 	"path/filepath"
 	"strings"
 
@@ -30,9 +29,9 @@ type SourceSpec struct {
 
 type LoadConfig struct {
 	Sources       []SourceSpec
-	Client        *http.Client
 	Catalog       *catalog.Catalog
 	SubgraphRules []policy.Rule
+	BeforeMerge   func(SourceSpec, inventory.Document) (inventory.Document, error)
 }
 
 type Result struct {
@@ -52,6 +51,12 @@ func Load(cfg LoadConfig) (Result, error) {
 		document, displayLocation, err := loadSource(cfg, source, index)
 		if err != nil {
 			return Result{}, err
+		}
+		if cfg.BeforeMerge != nil {
+			document, err = cfg.BeforeMerge(source, document)
+			if err != nil {
+				return Result{}, err
+			}
 		}
 		documents = append(documents, document)
 		displayLocations = append(displayLocations, displayLocation)

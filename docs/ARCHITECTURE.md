@@ -22,7 +22,7 @@ Supported CLI input kinds:
 - `cyclonedx-json=<path>`
 - `spdx-json=<path>`
 
-Runtime-level CLI defaults can also be loaded from a versioned `-config` JSON. The precedence contract is `CLI > env > runtime config > built-in default`, while list-valued settings such as `inputs` and `licenseCatalogs` are replaced rather than merged when the CLI specifies them.
+Runtime-level CLI defaults can also be loaded from a versioned `-config` / `--config` JSON. The precedence contract is `CLI > env > runtime config > built-in default`, while list-valued settings such as `inputs` and `licenseCatalogs` are replaced rather than merged when the CLI specifies them.
 
 Multiple `-input` flags are merged into one normalized inventory.
 
@@ -84,11 +84,11 @@ Metadata enrichment is intentionally split into two scopes:
 - source-local enrichment before merge, for evidence that is naturally tied to a single input source or machine-local package-manager artifact
 - global enrichment after merge, for remote metadata and review-required self-resolution fallback
 
-This keeps local package-manager resolution close to the input that can actually observe it, while still deduplicating remote requests at the merged package identity level.
+This keeps local package-manager resolution close to the input that can actually observe it, while still deduplicating remote requests at the merged package identity level. Packages that already carry `local-package-manager` artifact evidence are skipped during the remote enrichment phase so the remote stage only resolves packages that still need non-local evidence.
 
 For NuGet specifically, enrichment first checks the local global-packages cache and then the remote registration/package endpoints. When registration metadata does not expose a usable SPDX expression, the resolver can read embedded `<license type="file">` content from the package archive so text-based catalog normalization still has a chance to classify the license.
 
-External HTTP calls used by metadata enrichment and vulnerability assessment are intentionally configurable. npm registry, NuGet registration, OSV, GitHub Advisory, and NVD endpoints can be redirected to mirrors or proxies, and metadata/vulnerability API requests can be cached with explicit `off`, `use`, `refresh`, and `cache-only` modes plus TTL control. The endpoints actually used during a run are emitted in JSON outputs as `provenance.externalSources`, while remote license catalogs keep their own `provenance.catalogSources` and stale-fallback cache because catalog layering and pinning semantics are treated as a distinct contract from generic HTTP response reuse.
+External HTTP calls used by metadata enrichment and vulnerability assessment are intentionally configurable. npm registry, NuGet registration, OSV, GitHub Advisory, and NVD endpoints can be redirected to mirrors or proxies, and metadata/vulnerability API requests can be cached with explicit `off`, `use`, `refresh`, and `cache-only` modes plus TTL control. Response buffering for those cached requests still observes request-specific metadata/package-content size limits before content is materialized in memory or written to disk. The endpoints actually used during a run are emitted in JSON outputs as `provenance.externalSources`, while remote license catalogs keep their own `provenance.catalogSources` and stale-fallback cache because catalog layering and pinning semantics are treated as a distinct contract from generic HTTP response reuse.
 
 Artifact-backed resolution is treated separately from metadata caching. Local package-manager artifacts and remote package-content fallback both use explicit safety limits for total package artifact size, metadata file size, embedded license file size, and archive entry count. Breaching those limits is considered an abnormal input condition and aborts the run instead of degrading into review-only output.
 

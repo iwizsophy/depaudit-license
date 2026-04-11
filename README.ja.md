@@ -206,11 +206,11 @@ package 単位の license override:
 - `-template`, `-theme-css`
 - `-legal-template`, `-legal-theme-css`
 - `-vuln-template`, `-vuln-theme-css`
-- `-config` は CLI 実行設定 JSON を読み込みます
+- `-config` / `--config` は CLI 実行設定 JSON を読み込みます
 
 runtime config:
 
-- `-config <path>` で versioned な実行設定 JSON を読み込みます
+- `-config <path>`、`--config <path>`、`--config=<path>` で versioned な実行設定 JSON を読み込みます
 - 優先順位は `CLI > env > runtime config > built-in default` です
 - runtime config 内のローカル path は config file 自身の配置ディレクトリ基準で解決されます
 - `inputs` と `licenseCatalogs` は list 設定なので、CLI で `-input` または `-license-catalog` を 1 件でも指定した場合は runtime config 側の list を置き換えます
@@ -261,13 +261,13 @@ secret 系設定の優先順位は次のとおりです。
 - runtime config
 - built-in default
 
-`-http-cache-*` は package metadata enrichment と vulnerability API に適用されます。remote license catalog URL については、引き続き `-remote-catalog-mode` / `-remote-catalog-cache-dir` を使い、stale-fallback は catalog 専用挙動として扱います。
+`-http-cache-*` は package metadata enrichment と vulnerability API に適用されます。remote license catalog URL については、引き続き `-remote-catalog-mode` / `-remote-catalog-cache-dir` を使い、stale-fallback は catalog 専用挙動として扱います。HTTP cache に保存されるレスポンスも、メモリへの取り込みやディスク書き込みの前に、リクエストごとの metadata / package-content size limit に従って上限チェックされます。
 
 artifact に基づく license 解決には、package artifact 本体、package metadata file、embedded license file、package archive entry count の安全上限も適用されます。これらの上限は local package-manager artifact と remote package-content fallback の両方に適用されます。上限を超えた場合は review 用出力へフォールバックせず、その run を error で停止します。
 
 run 中に実際に使用された external metadata / vulnerability endpoint は、report JSON と vulnerability JSON の `provenance.externalSources` にも記録されます。remote license catalog URL は引き続き `provenance.catalogSources` に出力されます。
 
-package 単位では `provenance.artifactResolution` も記録されます。`node_modules` や NuGet `global-packages` のような local package-manager artifact を優先し、field を上書きしない no-op enrichment でも local 根拠を保持できます。local package-manager artifact を確認できず remote を根拠にした場合は `reviewRequired: true` を付け、stderr warning と report JSON の `remote_resolution_fallback_used` diagnostic で明示します。つまり、local artifact に基づく結果と分けて review できるようにします。
+package 単位では `provenance.artifactResolution` も記録されます。`node_modules` や NuGet `global-packages` のような local package-manager artifact を優先し、field を上書きしない no-op enrichment でも local 根拠を保持できます。remote enrichment フェーズでは、すでに local package-manager artifact 根拠を持つ package への外部 lookup を省略します。local package-manager artifact を確認できず remote を根拠にした場合は `reviewRequired: true` を付け、stderr warning と report JSON の `remote_resolution_fallback_used` diagnostic で明示します。つまり、local artifact に基づく結果と分けて review できるようにします。
 
 推奨パターン:
 

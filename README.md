@@ -206,11 +206,11 @@ Presentation:
 - `-template`, `-theme-css`
 - `-legal-template`, `-legal-theme-css`
 - `-vuln-template`, `-vuln-theme-css`
-- `-config` loads a versioned runtime config JSON for CLI defaults
+- `-config` / `--config` loads a versioned runtime config JSON for CLI defaults
 
 Runtime config:
 
-- `-config <path>` loads runtime defaults from JSON
+- `-config <path>`, `--config <path>`, or `--config=<path>` loads runtime defaults from JSON
 - precedence is `CLI > env > runtime config > built-in default`
 - local paths inside the runtime config are resolved relative to the config file itself
 - `inputs` and `licenseCatalogs` are list settings, so any CLI `-input` or `-license-catalog` replaces the runtime-config list instead of appending to it
@@ -261,13 +261,13 @@ For secret-like settings, the effective precedence is:
 - runtime config
 - built-in default
 
-`-http-cache-*` applies to package metadata enrichment and vulnerability APIs. Remote license catalog URLs continue to use `-remote-catalog-mode` / `-remote-catalog-cache-dir` so stale-fallback behavior remains catalog-specific.
+`-http-cache-*` applies to package metadata enrichment and vulnerability APIs. Remote license catalog URLs continue to use `-remote-catalog-mode` / `-remote-catalog-cache-dir` so stale-fallback behavior remains catalog-specific. Cached HTTP responses are also bounded by the same request-specific metadata and package-content size limits before they are buffered or written to disk.
 
 Artifact-backed license resolution also enforces explicit safety limits for package artifacts, package metadata files, embedded license files, and package archive entry counts. The same limits apply to local package-manager artifacts and remote package-content fallback. When one of these limits is exceeded, the run fails with an error instead of falling back to review-only output.
 
 The external metadata and vulnerability endpoints actually used during the run are recorded in report JSON and vulnerability JSON as `provenance.externalSources`. Remote license catalog URLs continue to appear in `provenance.catalogSources`.
 
-Package-level provenance can also record `provenance.artifactResolution`. Local package-manager artifacts such as `node_modules` or NuGet `global-packages` are preferred and can be recorded even when enrichment does not need to overwrite any package fields. When no local package-manager artifact is available and the resolver has to rely on a remote source, the package is marked with `reviewRequired: true`, a warning is emitted to stderr, and report JSON includes a `remote_resolution_fallback_used` diagnostic so the result can be reviewed separately from local-artifact-backed evidence.
+Package-level provenance can also record `provenance.artifactResolution`. Local package-manager artifacts such as `node_modules` or NuGet `global-packages` are preferred and can be recorded even when enrichment does not need to overwrite any package fields. The remote enrichment phase skips packages that already carry local package-manager artifact evidence so redundant external lookups are avoided. When no local package-manager artifact is available and the resolver has to rely on a remote source, the package is marked with `reviewRequired: true`, a warning is emitted to stderr, and report JSON includes a `remote_resolution_fallback_used` diagnostic so the result can be reviewed separately from local-artifact-backed evidence.
 
 Recommended patterns:
 

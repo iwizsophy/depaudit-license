@@ -9,6 +9,9 @@ The format is intentionally simple and release-oriented.
 ### Changed
 
 - Removed the legacy `-exclude-patterns` CLI shorthand and `excludePatterns` runtime-config field. Shallow output filtering is now configured only through versioned `-exclude-policy` rules.
+- Runtime config loading now accepts `-config`, `--config`, and `--config=<path>` consistently.
+- Remote metadata enrichment now skips packages that are already backed by local package-manager artifact evidence.
+- Shared HTTP caching now enforces request-specific response size limits before buffering or persisting cached payloads.
 
 ## [1.3.0] - 2026-04-11
 

@@ -57,6 +57,7 @@ SBOM inputs can also carry packages that are normalized as:
 In practice this means:
 
 - repository scan is designed around Node.js manifests and lockfiles (`package.json`, `pnpm-lock.yaml`, `yarn.lock`) and .NET / NuGet manifests and metadata
+- NuGet enrichment can resolve embedded file-based licenses from either the local global-packages cache or the remote package archive when registration metadata alone is insufficient
 - CycloneDX / SPDX inputs can bring in packages from other ecosystems, but metadata enrichment and ecosystem-specific behavior may be more limited when the package is only represented as generic SBOM data
 - report and legal notice outputs work across the normalized inventory, while enrichment and vulnerability matching quality can vary by ecosystem and available identifiers
 
@@ -150,6 +151,8 @@ License definitions and descriptions:
 - `-exclude-policy` loads versioned shallow/subgraph exclude policy JSON
 - `-exclude-patterns` remains supported and is internally synthesized as a legacy shallow rule
 
+The built-in catalog now also includes review-only definitions for common source-available and proprietary-adjacent licenses. When a package matches one of these definitions, it can resolve out of `Unknown`, but the matched license still carries `requires_manual_review: true` and should not be treated as pre-approved OSS without policy review.
+
 Package-level license override:
 
 ```json
@@ -188,6 +191,8 @@ Package-level license override:
 ```
 
 Use `-license-catalog` when a raw license string or URL should normalize to a catalog definition across matching packages. Use `-license-override-file` when only a selected package should be manually resolved. The default `mode` is `ifMissing`, which applies only when `licenseKey` is blank or the fallback (`Unknown`). Use `mode: "force"` to intentionally replace an existing non-fallback license.
+
+Examples of built-in review-only keys include `Microsoft-Software-License-Terms`, `BUSL-1.1`, `Elastic-2.0`, `SSPL-1.0`, `Commons-Clause`, `PolyForm-Noncommercial-1.0.0`, `FSL-1.1-MIT`, `Confluent-Community-License`, `Timescale-License`, and `CockroachDB-Community-License`.
 
 Presentation:
 
@@ -304,3 +309,7 @@ Public OSS releases start at `1.0.0`.
 
 - This is an independent OSS tool for license inventory, notice generation, and supplemental vulnerability reporting.
 - It is not affiliated with OSV, GitHub Advisory Database, NVD, SPDX, or the CycloneDX project.
+- It is intended to assist and streamline license inventory, notice generation, and review workflows, not to conclusively resolve licensing issues.
+- It does not provide legal advice, legal opinions, or a guarantee of license compliance.
+- License classification, metadata enrichment, and generated notice outputs can be incomplete, outdated, or incorrect depending on upstream package metadata and available evidence.
+- Final interpretation of license obligations, policy decisions, and release approval remains the responsibility of the user and, where appropriate, legal counsel or internal compliance review.

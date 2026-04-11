@@ -8,6 +8,17 @@ The format is intentionally simple and release-oriented.
 
 No notable changes yet.
 
+## [1.3.0] - 2026-04-11
+
+### Added
+
+- Built-in review-only catalog definitions for common source-available and proprietary-adjacent licenses, including Microsoft Software License Terms, BUSL, Elastic License 2.0, SSPL, Commons Clause, PolyForm, Functional Source License, Confluent Community License, Timescale License, and CockroachDB Community License.
+- Japanese localized explanations for the new review-only catalog entries so reports can carry short operator-facing guidance without treating those licenses as pre-approved OSS.
+
+### Changed
+
+- NuGet registration fallback now reads embedded `<license type="file">` evidence from package archives even when registration metadata also exposes `licenseUrl`, allowing review-only or file-based licenses to resolve out of `Unknown` when the package archive contains a recognizable license text.
+
 ## [1.2.0] - 2026-04-10
 
 ### Added

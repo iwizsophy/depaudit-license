@@ -447,7 +447,19 @@ func TestNormalizeTextUsesEmbeddedLicenseEvidence(t *testing.T) {
 		"Permission is hereby granted, free of charge.\nTHE SOFTWARE IS PROVIDED \"AS IS\".": "MIT",
 		"Apache License\nVersion 2.0, January 2004\nhttp://www.apache.org/licenses/":         "Apache-2.0",
 		"Apache License, Version 2.0":                                                        "Apache-2.0",
-		"internal commercial terms only":                                                     "Unknown",
+		"MICROSOFT SOFTWARE LICENSE TERMS\n\nThese license terms are an agreement between you and Microsoft Corporation. They apply to the software named above. Any other use of the software is not licensed.":                                           "Microsoft-Software-License-Terms",
+		"Business Source License 1.1\n\nThe Licensor hereby grants you the right to copy, modify, create derivative works, redistribute, and make non-production use of the Licensed Work. Effective on the Change Date, the Change License applies.":      "BUSL-1.1",
+		"Elastic License 2.0\n\nYou may not provide the software to third parties as a hosted or managed service. You may not move, change, disable, or circumvent the license key functionality.":                                                         "Elastic-2.0",
+		"Server Side Public License\nVERSION 1, OCTOBER 16, 2018\n\nIf you make the functionality of the Program or a modified version available to third parties as a service, you must make the Service Source Code available.":                          "SSPL-1.0",
+		"Commons Clause License Condition v1.0\n\nthe License does not grant to you, the right to Sell the Software. For purposes of the foregoing, Sell means a transaction whose value derives from the functionality of the Software.":                  "Commons-Clause",
+		"PolyForm Noncommercial License 1.0.0\n\nAny noncommercial purpose is a permitted purpose. Personal use for research, experiment, and testing is permitted. These terms do not allow you to sublicense or transfer any of your licenses.":          "PolyForm-Noncommercial-1.0.0",
+		"PolyForm Small Business License 1.0.0\n\nUse of the software for the benefit of your company is use for a permitted purpose if your company has fewer than 100 total individuals and less than 1,000,000 USD total revenue.":                      "PolyForm-Small-Business-1.0.0",
+		"Functional Source License, Version 1.1, MIT Future License\n\nA Permitted Purpose is any purpose other than a Competing Use. Competing Use means making the Software available to others in a commercial product or service.":                     "FSL-1.1-MIT",
+		"Functional Source License, Version 1.1, ALv2 Future License\n\nA Permitted Purpose is any purpose other than a Competing Use. Competing Use means making the Software available to others in a commercial product or service.":                    "FSL-1.1-ALv2",
+		"Confluent Community License Version 1.0\n\nLicensee must cause any Software modified by Licensee to carry prominent notices. Licensee shall not exercise the License for an Excluded Purpose.":                                                    "Confluent-Community-License",
+		"TIMESCALE LICENSE AGREEMENT\n\nValue Added Products or Services may be permitted. Time-sharing services or database-as-a-service services offered to third parties to provide time-series database functions or operations are restricted.":       "Timescale-License",
+		"CockroachDB Community License Agreement\n\nGrant of Copyright License applies to CockroachDB Self-hosted and Paid Enterprise License requirements may apply to enterprise features. Enterprise Derivative Works are subject to additional terms.": "CockroachDB-Community-License",
+		"internal commercial terms only": "Unknown",
 	}
 
 	for input, want := range cases {

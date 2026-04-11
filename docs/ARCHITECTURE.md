@@ -63,6 +63,8 @@ Catalog sources can be layered, and remote catalogs are supported with:
 
 Locale bundles enrich descriptions and obligations without changing the normalized license key structure.
 
+The built-in catalog may intentionally include review-only definitions for common source-available or proprietary-adjacent licenses. These definitions help move packages out of the fallback `Unknown` bucket while preserving `requires_manual_review: true` as an explicit contract for downstream policy and report handling.
+
 Package-level license overrides are intentionally separate from catalog sources. Catalog overrides normalize raw license evidence globally, while license override files match selected inventory packages and update their `licenseKey` with explicit provenance.
 
 ## Metadata enrichment and provenance
@@ -74,6 +76,8 @@ After input loading, ecosystem-aware enrichment can add metadata such as:
 - embedded license text
 
 Merge and enrich stages preserve provenance so downstream outputs can explain where fields came from and how layered sources were applied.
+
+For NuGet specifically, enrichment first checks the local global-packages cache and then the remote registration/package endpoints. When registration metadata does not expose a usable SPDX expression, the resolver can read embedded `<license type="file">` content from the package archive so text-based catalog normalization still has a chance to classify the license.
 
 ## Output model
 

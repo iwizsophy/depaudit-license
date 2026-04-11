@@ -30,8 +30,8 @@ release workflow は GitHub Actions の [`.github/workflows/release.yml`](.githu
 例:
 
 ```powershell
-git tag -a v1.2.0 -m "Release v1.2.0"
-git push origin v1.2.0
+git tag -a v1.3.0 -m "Release v1.3.0"
+git push origin v1.3.0
 ```
 
 ## Representative smoke matrix
@@ -57,14 +57,14 @@ smoke matrix に加えて、次の最終出力契約は個別の integration tes
 - embedded license text の raw text copy と `copiedFilePath` 出力
 - package-level license override の適用、validation 失敗、custom catalog key、provenance / diagnostics 出力
 
-## 1.2.0 release checklist
+## 1.3.0 release checklist
 
-`v1.2.0` では、少なくとも次の文書状態を確認してから tag を作成します。
+`v1.3.0` では、少なくとも次の文書状態を確認してから tag を作成します。
 
-- [CHANGELOG.md](CHANGELOG.md) に `1.2.0` の section があり、embedded license text と package-level license override が記載されている
-- [README.md](README.md) と [README.ja.md](README.ja.md) に `-license-override-file` の使い分け、`ifMissing` / `force` の挙動、実行例が記載されている
-- [configs/README.md](configs/README.md) に license override schema / sample と selector の用途が記載されている
-- release archive に含まれる `configs/` から `license-overrides.schema.json` と `license-overrides.sample.json` を参照できる
+- [CHANGELOG.md](CHANGELOG.md) に `1.3.0` の section があり、review-only catalog entries と NuGet embedded file license fallback が記載されている
+- [README.md](README.md) と [README.ja.md](README.ja.md) に review-only catalog definitions の扱いと NuGet embedded file license の解決方針が記載されている
+- [configs/README.md](configs/README.md) に review-only catalog entries と `requires_manual_review` の使い分けが記載されている
+- release archive に含まれる `configs/` から更新済みの `licenses.json` と `license-texts.ja.json` を参照できる
 
 ## Release decision
 

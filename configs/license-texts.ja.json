@@ -429,6 +429,276 @@
       ]
     },
     {
+      "key": "Microsoft-Software-License-Terms",
+      "description": "Microsoft 製品で用いられる独自ライセンス条項です。SPDX 標準ライセンスではないため、利用条件を手動確認してください。",
+      "obligations": [
+        "ライセンス文の確認",
+        "利用条件の遵守",
+        "Distributable Code を配布する場合はアプリケーション内で使用すること",
+        "配布者および外部エンドユーザーに少なくとも同等に保護する条件への同意を求めること",
+        "配布または利用に関する請求について Microsoft を補償・防御・免責すること",
+        "データ収集機能を利用する場合は適用法、必要な同意、プライバシーポリシー、Microsoft Privacy Statement に従うこと",
+        "輸出関連法令を遵守すること"
+      ],
+      "permissions": [
+        "ライセンス条項に従う利用",
+        "開発およびテスト目的でのコピーのインストール・利用",
+        "条件付きでの object code form のコピー・配布",
+        "アプリケーションの一部としての第三者配布"
+      ],
+      "limitations": [
+        "無保証",
+        "責任免除",
+        "単体配布、公開、賃貸、リース、提供、譲渡の禁止",
+        "Microsoft の商標を Microsoft 製または Microsoft 推奨と誤認させる形で使用することの禁止",
+        "Distributable Code のソースを Excluded License の対象にする変更または配布の禁止",
+        "技術的制限の回避、リバースエンジニアリング、逆コンパイル、逆アセンブルの禁止",
+        "Microsoft またはサプライヤーの通知表示の削除、最小化、ブロック、変更の禁止",
+        "直接損害の回復は原則として U.S. $5.00 まで",
+        "結果損害、逸失利益、特別損害、間接損害、偶発損害の回復不可",
+        "手動レビュー必須"
+      ]
+    },
+    {
+      "key": "BUSL-1.1",
+      "description": "Business Source License 1.1 は source-available 系のライセンスです。変更日や追加利用許諾など、パッケージごとの条件確認が必要です。",
+      "obligations": [
+        "ライセンス文の保持",
+        "Change Date の確認",
+        "Change License の確認",
+        "Additional Use Grant の確認",
+        "本番利用または制限対象利用に該当しないかの確認"
+      ],
+      "permissions": [
+        "条件付きの閲覧、コピー、改変、再配布",
+        "条件付きの非本番利用",
+        "Change Date 以降の Change License に基づく利用"
+      ],
+      "limitations": [
+        "Change Date 前は Open Source ライセンスではない",
+        "本番利用や競合サービス提供などが制限される場合がある",
+        "商用ライセンスが必要になる場合がある",
+        "手動レビュー必須"
+      ]
+    },
+    {
+      "key": "Elastic-2.0",
+      "description": "Elastic License 2.0 は source-available 系のライセンスです。ホステッドサービス提供やライセンスキー機能の扱いに制限があります。",
+      "obligations": [
+        "ライセンス文または URL の保持",
+        "通知表示の保持",
+        "利用形態がホステッドまたはマネージドサービス提供に該当しないかの確認"
+      ],
+      "permissions": [
+        "条件付きの利用、コピー、配布、改変",
+        "条件付きの派生物作成"
+      ],
+      "limitations": [
+        "第三者へのホステッドまたはマネージドサービス提供の禁止",
+        "ライセンスキー機能の移動、変更、無効化、回避の禁止",
+        "通知表示の削除または不明瞭化の禁止",
+        "特許請求時に権利が終了する場合がある",
+        "手動レビュー必須"
+      ]
+    },
+    {
+      "key": "SSPL-1.0",
+      "description": "Server Side Public License 1.0 はネットワークサービス提供時のソース提供義務が強いライセンスです。",
+      "obligations": [
+        "ライセンス文の保持",
+        "改変時のソース提供義務の確認",
+        "プログラムまたは改変版をサービスとして第三者に提供する場合の Service Source Code 提供義務の確認"
+      ],
+      "permissions": [
+        "条件付きの利用、コピー、改変、再配布",
+        "条件付きのネットワークサービス提供"
+      ],
+      "limitations": [
+        "ネットワークサービス提供時に周辺の管理、ユーザーインターフェイス、API、自動化、監視、バックアップ、ストレージ、ホスティング関連ソースまで開示対象になる可能性がある",
+        "強い copyleft / network copyleft として扱うべき",
+        "手動レビュー必須"
+      ]
+    },
+    {
+      "key": "Commons-Clause",
+      "description": "Commons Clause は既存ライセンスに販売制限を追加するライセンス条件です。ベースライセンスと併せて確認してください。",
+      "obligations": [
+        "ベースライセンスの確認",
+        "Commons Clause 条件表示の保持",
+        "ソフトウェア名およびライセンサーの確認",
+        "利用形態が Sell の定義に該当しないかの確認"
+      ],
+      "permissions": [
+        "ベースライセンスで許可された範囲の利用",
+        "販売制限に抵触しない範囲の利用"
+      ],
+      "limitations": [
+        "Software を Sell する権利は付与されない",
+        "価値がソフトウェア機能に実質的に由来する製品またはサービス提供が制限される場合がある",
+        "OSS ライセンス単体とは異なる追加条件として扱うべき",
+        "手動レビュー必須"
+      ]
+    },
+    {
+      "key": "PolyForm-Noncommercial-1.0.0",
+      "description": "PolyForm Noncommercial License 1.0.0 は非商用目的に限定した source-available 系ライセンスです。",
+      "obligations": [
+        "ライセンス文または URL の提供",
+        "Required Notice の保持",
+        "利用目的が非商用目的に該当するかの確認",
+        "特許防御条項と違反時の終了条件の確認"
+      ],
+      "permissions": [
+        "非商用目的での利用",
+        "非商用目的での改変および派生物作成",
+        "条件付きのコピー配布"
+      ],
+      "limitations": [
+        "商用目的での利用は許可されない",
+        "サブライセンスまたはライセンス移転は許可されない",
+        "無保証",
+        "責任免除",
+        "手動レビュー必須"
+      ]
+    },
+    {
+      "key": "PolyForm-Small-Business-1.0.0",
+      "description": "PolyForm Small Business License 1.0.0 は小規模事業者条件を満たす場合に限って事業利用を許可する source-available 系ライセンスです。",
+      "obligations": [
+        "ライセンス文または URL の提供",
+        "Required Notice の保持",
+        "利用主体が従業員および独立請負人 100 人未満の条件を満たすかの確認",
+        "前課税年度の総収入が 1,000,000 USD 未満の条件を満たすかの確認",
+        "特許防御条項と違反時の終了条件の確認"
+      ],
+      "permissions": [
+        "小規模事業者条件を満たす場合の事業利用",
+        "条件付きの改変および派生物作成",
+        "条件付きのコピー配布"
+      ],
+      "limitations": [
+        "小規模事業者条件を満たさない利用は許可されない",
+        "サブライセンスまたはライセンス移転は許可されない",
+        "無保証",
+        "責任免除",
+        "手動レビュー必須"
+      ]
+    },
+    {
+      "key": "FSL-1.1-MIT",
+      "description": "Functional Source License 1.1 は、一定期間後に MIT へ転換する source-available 系ライセンスです。転換前は competing use 制限があります。",
+      "obligations": [
+        "ライセンス文または URL の保持",
+        "著作権表示の保持",
+        "competing use に該当しないかの確認",
+        "将来ライセンス転換日を確認すること"
+      ],
+      "permissions": [
+        "条件付きの利用、コピー、改変、派生物作成、再配布",
+        "内部利用",
+        "非商用教育および非商用研究",
+        "転換日以降の MIT 条件での利用"
+      ],
+      "limitations": [
+        "competing commercial product or service での利用制限",
+        "転換日前は MIT ではない",
+        "商標利用制限",
+        "無保証",
+        "責任免除",
+        "手動レビュー必須"
+      ]
+    },
+    {
+      "key": "FSL-1.1-ALv2",
+      "description": "Functional Source License 1.1 は、一定期間後に Apache-2.0 へ転換する source-available 系ライセンスです。転換前は competing use 制限があります。",
+      "obligations": [
+        "ライセンス文または URL の保持",
+        "著作権表示の保持",
+        "competing use に該当しないかの確認",
+        "将来ライセンス転換日を確認すること"
+      ],
+      "permissions": [
+        "条件付きの利用、コピー、改変、派生物作成、再配布",
+        "内部利用",
+        "非商用教育および非商用研究",
+        "転換日以降の Apache-2.0 条件での利用"
+      ],
+      "limitations": [
+        "competing commercial product or service での利用制限",
+        "転換日前は Apache-2.0 ではない",
+        "商標利用制限",
+        "無保証",
+        "責任免除",
+        "手動レビュー必須"
+      ]
+    },
+    {
+      "key": "Confluent-Community-License",
+      "description": "Confluent Community License は source-available 系ライセンスで、競合するオンラインサービス用途に制限があります。",
+      "obligations": [
+        "ライセンス文または URL の保持",
+        "著作権表示、特許表示、商標表示、帰属表示の保持",
+        "改変ファイルに変更通知を付与すること",
+        "利用形態が Excluded Purpose に該当しないかの確認"
+      ],
+      "permissions": [
+        "条件付きの利用、コピー、配布、改変、派生物作成"
+      ],
+      "limitations": [
+        "競合する SaaS、PaaS、IaaS などのオンラインサービス提供用途は Excluded Purpose として禁止",
+        "サブライセンスされる利用形態は制限に注意が必要",
+        "特許訴訟時に権利終了の可能性",
+        "無保証",
+        "責任免除",
+        "手動レビュー必須"
+      ]
+    },
+    {
+      "key": "Timescale-License",
+      "description": "Timescale License Agreement は source-available 系ライセンスで、時系列データベース機能をサービスとして第三者提供する形態に制限があります。",
+      "obligations": [
+        "ライセンス文または URL の保持",
+        "予定利用が Value Added Products or Services に該当するか確認すること",
+        "派生物や再配布時の条件を確認すること"
+      ],
+      "permissions": [
+        "内部利用",
+        "条件付きの改変および派生物作成",
+        "条件付きの価値付加製品またはサービスへの組み込み",
+        "条件付きの単体再配布"
+      ],
+      "limitations": [
+        "第三者向け DBaaS、SaaS、time-sharing service などの提供制限",
+        "時系列データベース機能そのもののサービス提供制限",
+        "無保証",
+        "責任免除",
+        "手動レビュー必須"
+      ]
+    },
+    {
+      "key": "CockroachDB-Community-License",
+      "description": "CockroachDB Community License Agreement は CockroachDB Core と Self-hosted を分けて扱うライセンス契約です。Self-hosted や Enterprise 機能は追加条件や有償要件が絡みます。",
+      "obligations": [
+        "ライセンス文または URL の保持",
+        "利用している edition と feature が Core か Self-hosted かを確認すること",
+        "Paid Enterprise License が必要な機能か確認すること",
+        "再配布時の notice と変更表示条件を満たすこと"
+      ],
+      "permissions": [
+        "CockroachDB Core の適用ライセンスに従った利用",
+        "条件付きの Self-hosted 利用、再配布、派生物作成",
+        "非 Enterprise 機能の一部無償利用"
+      ],
+      "limitations": [
+        "Self-hosted または Enterprise 機能は有償契約が必要になる場合がある",
+        "Enterprise Derivative Works に追加条件が付く",
+        "特許訴訟時に権利終了の可能性",
+        "無保証",
+        "責任免除",
+        "手動レビュー必須"
+      ]
+    },
+    {
       "key": "NCSA",
       "description": "NCSA/Illinois 系のパーミッシブライセンスです。",
       "obligations": [

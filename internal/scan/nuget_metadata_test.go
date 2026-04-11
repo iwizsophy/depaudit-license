@@ -233,6 +233,62 @@ func TestNugetResolverReadsEmbeddedLicenseFileFromPackageArchive(t *testing.T) {
 	}
 }
 
+func TestNugetResolverPrefersEmbeddedLicenseFileOverRegistrationLicenseURL(t *testing.T) {
+	t.Parallel()
+
+	archive := buildTestNugetArchive(t, map[string]string{
+		"Sample.Package.nuspec": `<?xml version="1.0" encoding="utf-8"?>
+<package>
+  <metadata>
+    <id>Sample.Package</id>
+    <version>2.0.0</version>
+    <authors>Sample Author</authors>
+    <license type="file">LICENSE.txt</license>
+    <licenseUrl>https://aka.ms/deprecateLicenseUrl</licenseUrl>
+  </metadata>
+</package>`,
+		"LICENSE.txt": "archive embedded license",
+	})
+
+	var server *httptest.Server
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/sample.package/2.0.0.json":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"catalogEntry":"` + server.URL + `/catalog/sample.package.2.0.0.json","packageContent":"` + server.URL + `/package/sample.package.2.0.0.nupkg"}`))
+		case "/catalog/sample.package.2.0.0.json":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{
+  "authors":"Sample Author",
+  "licenseExpression":"",
+  "licenseUrl":"https://www.nuget.org/packages/Sample.Package/2.0.0/license",
+  "projectUrl":"https://example.test/sample",
+  "published":"2024-02-03T00:00:00Z"
+}`))
+		case "/package/sample.package.2.0.0.nupkg":
+			w.Header().Set("Content-Type", "application/octet-stream")
+			_, _ = w.Write(archive)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	meta, ok := (&nugetResolver{
+		client:              server.Client(),
+		registrationBaseURL: server.URL,
+	}).resolveFromRegistration("Sample.Package", "2.0.0")
+	if !ok {
+		t.Fatal("expected registration lookup to succeed")
+	}
+	if meta.RawLicense != "LICENSE.txt" {
+		t.Fatalf("raw license = %q", meta.RawLicense)
+	}
+	if meta.EmbeddedLicensePath != "LICENSE.txt" || meta.EmbeddedLicenseText != "archive embedded license" {
+		t.Fatalf("embedded license metadata = %#v", meta)
+	}
+}
+
 func TestNugetResolverRegistrationFieldFallbacks(t *testing.T) {
 	t.Parallel()
 

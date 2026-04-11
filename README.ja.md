@@ -57,6 +57,7 @@ SBOM input からは、次の normalized ecosystem も取り込めます。
 意味合いとしては次のとおりです。
 
 - repository scan は Node.js の manifest / lockfile（`package.json`, `pnpm-lock.yaml`, `yarn.lock`）と .NET / NuGet の manifest / metadata を中心に設計されています
+- NuGet enrichment は、registration metadata だけでは判定できない場合でも、local global-packages cache や remote package archive から同梱 file license を解決できます
 - CycloneDX / SPDX input では他 ecosystem の package も取り込めますが、generic な SBOM data としてしか表現できない場合は metadata enrichment や ecosystem 固有挙動が限定されます
 - report / legal notice 出力は正規化 inventory 全体に対して動作しますが、enrichment や vulnerability matching の精度は ecosystem と利用できる identifier に依存します
 
@@ -150,6 +151,8 @@ macOS:
 - `-exclude-policy` は versioned な shallow/subgraph exclude policy JSON を読み込みます
 - `-exclude-patterns` は引き続き利用でき、内部的には legacy shallow rule として扱われます
 
+既定 catalog には、common な source-available / proprietary-adjacent license を review-only key として識別する定義も含まれます。これらに一致した package は `Unknown` からは抜けますが、`requires_manual_review: true` のままであり、事前承認済み OSS と同じ扱いにはしません。
+
 package 単位の license override:
 
 ```json
@@ -188,6 +191,8 @@ package 単位の license override:
 ```
 
 `-license-catalog` は raw license 文字列や URL の正規化に使い、同じ raw license に一致する package 全体へ効きます。特定 package だけを手動解決したい場合は `-license-override-file` を使います。既定の `mode` は `ifMissing` で、`licenseKey` が空または fallback (`Unknown`) の場合だけ適用します。既存の非 fallback license を上書きする場合は `mode: "force"` を明示します。
+
+既定の review-only key の例として、`Microsoft-Software-License-Terms`, `BUSL-1.1`, `Elastic-2.0`, `SSPL-1.0`, `Commons-Clause`, `PolyForm-Noncommercial-1.0.0`, `FSL-1.1-MIT`, `Confluent-Community-License`, `Timescale-License`, `CockroachDB-Community-License` などがあります。
 
 見た目:
 
@@ -300,3 +305,7 @@ remote catalog の挙動:
 
 - このツールは、ライセンス inventory、notice 生成、補助的な vulnerability reporting のための独立した OSS です
 - OSV、GitHub Advisory Database、NVD、SPDX、CycloneDX project とは提携していません
+- ライセンス inventory、notice 生成、review workflow の容易化を目的とした支援ツールであり、ライセンス上の問題を最終的に解決または確定するものではありません
+- 法的助言、法的見解、またはライセンス適合性の保証を提供するものではありません
+- license classification、metadata enrichment、生成される notice 出力は、upstream package metadata や取得できる evidence に依存しており、不完全、古い、または誤っている可能性があります
+- ライセンス義務の最終解釈、社内ポリシー判断、公開可否の承認は利用者側の責任で行い、必要に応じて法務または compliance review を実施してください

@@ -818,7 +818,6 @@
       "names": [
         "Functional Source License, Version 1.1, MIT Future License",
         "Functional Source License 1.1 MIT Future License",
-        "Functional Source License 1.1",
         "FSL-1.1-MIT"
       ],
       "exact_urls": [
@@ -826,7 +825,6 @@
       ],
       "url_prefixes": [],
       "contains": [
-        "functional source license",
         "fsl-1.1-mit"
       ],
       "text_matchers": [
@@ -854,7 +852,6 @@
       "names": [
         "Functional Source License, Version 1.1, ALv2 Future License",
         "Functional Source License 1.1 ALv2 Future License",
-        "Functional Source License 1.1",
         "FSL-1.1-ALv2"
       ],
       "exact_urls": [
@@ -862,7 +859,6 @@
       ],
       "url_prefixes": [],
       "contains": [
-        "functional source license",
         "fsl-1.1-alv2"
       ],
       "text_matchers": [

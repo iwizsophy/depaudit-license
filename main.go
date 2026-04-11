@@ -565,11 +565,12 @@ func buildHTTPClient(client *http.Client, cfg config, requestObserver func(*http
 		client = &http.Client{Timeout: cfg.timeout}
 	}
 	cacheCfg := httpcache.Config{
-		Mode:            cfg.httpCacheMode,
-		Dir:             cfg.httpCacheDir,
-		TTL:             cfg.httpCacheTTL,
-		RequestObserver: requestObserver,
-		WarningWriter:   stderrOut,
+		Mode:             cfg.httpCacheMode,
+		Dir:              cfg.httpCacheDir,
+		TTL:              cfg.httpCacheTTL,
+		MaxResponseBytes: cfg.maxPackageArtifactBytes,
+		RequestObserver:  requestObserver,
+		WarningWriter:    stderrOut,
 	}
 	if err := httpcache.ValidateConfig(cacheCfg); err != nil {
 		return nil, err

@@ -359,6 +359,66 @@ func TestWrapClientWarnsWhenCacheWriteFails(t *testing.T) {
 	}
 }
 
+func TestWrapClientRejectsOversizedResponseBeforeCaching(t *testing.T) {
+	t.Parallel()
+
+	cacheDir := t.TempDir()
+	callCount := 0
+	client := WrapClient(&http.Client{
+		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			callCount++
+			return &http.Response{
+				StatusCode:    http.StatusOK,
+				ContentLength: 32,
+				Header:        make(http.Header),
+				Body:          io.NopCloser(bytes.NewBufferString(`{"payload":"01234567890123456789"}`)),
+			}, nil
+		}),
+	}, Config{Mode: ModeUse, Dir: cacheDir, TTL: time.Hour, MaxResponseBytes: 16})
+
+	if _, err := client.Get("https://example.test/pkg/react"); err == nil {
+		t.Fatal("expected oversized response error")
+	}
+	if callCount != 1 {
+		t.Fatalf("call count = %d", callCount)
+	}
+
+	req, err := http.NewRequest(http.MethodGet, "https://example.test/pkg/react", nil)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	info, ok, err := cacheableRequestInfo(req)
+	if err != nil || !ok {
+		t.Fatalf("cacheableRequestInfo = %#v %v %v", info, ok, err)
+	}
+	if _, err := readCache(cacheFilePath(cacheDir, info)); err == nil {
+		t.Fatal("expected no cache entry to be written")
+	}
+}
+
+func TestWrapClientUsesRequestSpecificMaxResponseBytes(t *testing.T) {
+	t.Parallel()
+
+	client := WrapClient(&http.Client{
+		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     make(http.Header),
+				Body:       io.NopCloser(bytes.NewBufferString(`123456789`)),
+			}, nil
+		}),
+	}, Config{Mode: ModeUse, Dir: t.TempDir(), TTL: time.Hour, MaxResponseBytes: 64})
+
+	req, err := http.NewRequest(http.MethodGet, "https://example.test/pkg/react", nil)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req = WithMaxResponseBytes(req, 8)
+	if _, err := client.Do(req); err == nil {
+		t.Fatal("expected request-specific response limit error")
+	}
+}
+
 func TestWrapClientInvokesRequestObserverOnCacheHit(t *testing.T) {
 	t.Parallel()
 

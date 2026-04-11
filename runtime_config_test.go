@@ -5,6 +5,9 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"depaudit-license/internal/scan"
+	"depaudit-license/internal/vuln"
 )
 
 func TestLoadRuntimeConfigRejectsUnknownField(t *testing.T) {
@@ -51,6 +54,33 @@ func TestLoadRuntimeConfigRejectsTrailingContent(t *testing.T) {
 
 	if _, _, err := loadRuntimeConfig([]string{"-config", configPath}); err == nil {
 		t.Fatal("expected trailing content error")
+	}
+}
+
+func TestDefaultRuntimeConfigUsesSharedDefaultConstants(t *testing.T) {
+	t.Parallel()
+
+	cfg := defaultRuntimeConfig()
+	if cfg.osvBaseURL != vuln.DefaultOSVBaseURL {
+		t.Fatalf("osvBaseURL = %q", cfg.osvBaseURL)
+	}
+	if cfg.gitHubAdvisoryBaseURL != vuln.DefaultGitHubAdvisoryBaseURL {
+		t.Fatalf("gitHubAdvisoryBaseURL = %q", cfg.gitHubAdvisoryBaseURL)
+	}
+	if cfg.nvdBaseURL != vuln.DefaultNVDBaseURL {
+		t.Fatalf("nvdBaseURL = %q", cfg.nvdBaseURL)
+	}
+	if cfg.maxPackageArtifactBytes != scan.DefaultMaxPackageArtifactBytes {
+		t.Fatalf("maxPackageArtifactBytes = %d", cfg.maxPackageArtifactBytes)
+	}
+	if cfg.maxPackageMetadataBytes != scan.DefaultMaxPackageMetadataBytes {
+		t.Fatalf("maxPackageMetadataBytes = %d", cfg.maxPackageMetadataBytes)
+	}
+	if cfg.maxEmbeddedLicenseBytes != scan.DefaultMaxEmbeddedLicenseBytes {
+		t.Fatalf("maxEmbeddedLicenseBytes = %d", cfg.maxEmbeddedLicenseBytes)
+	}
+	if cfg.maxPackageArchiveEntries != scan.DefaultMaxPackageArchiveEntries {
+		t.Fatalf("maxPackageArchiveEntries = %d", cfg.maxPackageArchiveEntries)
 	}
 }
 

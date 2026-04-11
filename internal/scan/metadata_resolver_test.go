@@ -162,6 +162,9 @@ func TestNodeResolverResolveRemoteHelperBranches(t *testing.T) {
 	if got.Source != "npm-registry-version" || got.RawLicense != "MIT" {
 		t.Fatalf("registry resolve = %#v", got)
 	}
+	if cached := resolver.cache["react@19.2.4"]; cached.Source != "npm-registry-version" || cached.RawLicense != "MIT" {
+		t.Fatalf("cached registry resolve = %#v", cached)
+	}
 	if got.ArtifactResolution == nil || got.ArtifactResolution.Kind != "remote-metadata" || got.ArtifactResolution.Detail != "npm-registry-version" || !got.ArtifactResolution.ReviewRequired {
 		t.Fatalf("artifact resolution = %#v", got.ArtifactResolution)
 	}
@@ -180,6 +183,9 @@ func TestNodeResolverResolveRemoteHelperBranches(t *testing.T) {
 	}
 	if got.Source != "fallback" || got.RawLicense != "Unknown" {
 		t.Fatalf("invalid json fallback = %#v", got)
+	}
+	if cached := resolver.cache["react@19.2.4"]; cached.Source != "fallback" || cached.RawLicense != "Unknown" {
+		t.Fatalf("cached fallback = %#v", cached)
 	}
 }
 

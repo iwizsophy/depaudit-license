@@ -2,6 +2,7 @@ package httpcache
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
@@ -25,11 +26,12 @@ const (
 )
 
 type Config struct {
-	Mode            string
-	Dir             string
-	TTL             time.Duration
-	RequestObserver func(*http.Request)
-	WarningWriter   io.Writer
+	Mode             string
+	Dir              string
+	TTL              time.Duration
+	MaxResponseBytes int64
+	RequestObserver  func(*http.Request)
+	WarningWriter    io.Writer
 }
 
 type cachedResponse struct {
@@ -55,6 +57,8 @@ type requestInfo struct {
 	varyHash string
 }
 
+type maxResponseBytesContextKey struct{}
+
 func DefaultDir() string {
 	dir, err := os.UserCacheDir()
 	if err != nil || strings.TrimSpace(dir) == "" {
@@ -73,11 +77,12 @@ func NormalizeConfig(cfg Config) Config {
 		dir = DefaultDir()
 	}
 	return Config{
-		Mode:            mode,
-		Dir:             dir,
-		TTL:             cfg.TTL,
-		RequestObserver: cfg.RequestObserver,
-		WarningWriter:   cfg.WarningWriter,
+		Mode:             mode,
+		Dir:              dir,
+		TTL:              cfg.TTL,
+		MaxResponseBytes: cfg.MaxResponseBytes,
+		RequestObserver:  cfg.RequestObserver,
+		WarningWriter:    cfg.WarningWriter,
 	}
 }
 
@@ -91,7 +96,18 @@ func ValidateConfig(cfg Config) error {
 	if cfg.TTL < 0 {
 		return fmt.Errorf("http cache TTL must be zero or greater")
 	}
+	if cfg.MaxResponseBytes < 0 {
+		return fmt.Errorf("http cache max response bytes must be zero or greater")
+	}
 	return nil
+}
+
+func WithMaxResponseBytes(req *http.Request, maxBytes int64) *http.Request {
+	if req == nil || maxBytes <= 0 {
+		return req
+	}
+	clone := req.Clone(context.WithValue(req.Context(), maxResponseBytesContextKey{}, maxBytes))
+	return clone
 }
 
 func WrapClient(client *http.Client, cfg Config) *http.Client {
@@ -154,7 +170,13 @@ func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
 		return nil, err
 	}
 
-	body, readErr := io.ReadAll(resp.Body)
+	maxResponseBytes := effectiveMaxResponseBytes(cfg, req)
+	if maxResponseBytes > 0 && resp.ContentLength > maxResponseBytes {
+		resp.Body.Close()
+		return nil, fmt.Errorf("http cache response content length %d exceeds limit %d", resp.ContentLength, maxResponseBytes)
+	}
+
+	body, readErr := readAllLimited(resp.Body, maxResponseBytes)
 	resp.Body.Close()
 	if readErr != nil {
 		return nil, readErr
@@ -180,6 +202,21 @@ func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
 	}
 
 	return cloneResponse(resp, req, body), nil
+}
+
+func effectiveMaxResponseBytes(cfg Config, req *http.Request) int64 {
+	maxBytes := cfg.MaxResponseBytes
+	if req == nil {
+		return maxBytes
+	}
+	requestMaxBytes, _ := req.Context().Value(maxResponseBytesContextKey{}).(int64)
+	if requestMaxBytes <= 0 {
+		return maxBytes
+	}
+	if maxBytes <= 0 || requestMaxBytes < maxBytes {
+		return requestMaxBytes
+	}
+	return maxBytes
 }
 
 func cacheableRequestInfo(req *http.Request) (requestInfo, bool, error) {
@@ -228,6 +265,21 @@ func readRequestBody(req *http.Request) ([]byte, error) {
 	req.Body = io.NopCloser(bytes.NewReader(body))
 	req.ContentLength = int64(len(body))
 	return body, nil
+}
+
+func readAllLimited(reader io.Reader, maxBytes int64) ([]byte, error) {
+	if maxBytes <= 0 {
+		return io.ReadAll(reader)
+	}
+	limited := io.LimitReader(reader, maxBytes+1)
+	payload, err := io.ReadAll(limited)
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(payload)) > maxBytes {
+		return nil, fmt.Errorf("http cache response body exceeds limit %d", maxBytes)
+	}
+	return payload, nil
 }
 
 func cloneRequestWithBody(req *http.Request, body []byte) *http.Request {

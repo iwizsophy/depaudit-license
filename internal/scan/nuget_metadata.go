@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"depaudit-license/internal/externalaccess"
+	"depaudit-license/internal/httpcache"
 	"depaudit-license/internal/inventory"
 )
 
@@ -334,6 +335,7 @@ func (r *nugetResolver) resolveEmbeddedLicenseFromPackageContent(packageName str
 		Purpose: MetadataEnrichmentSourceKind,
 		BaseURL: externalaccess.OriginFromURL(packageContentURL),
 	})
+	req = httpcache.WithMaxResponseBytes(req, NormalizeArtifactReadLimits(r.artifactReadLimits).MaxPackageArtifactBytes)
 	req.Header.Set("User-Agent", "depaudit-license")
 
 	resp, err := r.client.Do(req)

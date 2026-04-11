@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"depaudit-license/internal/externalaccess"
+	"depaudit-license/internal/httpcache"
 	"depaudit-license/internal/inventory"
 )
 
@@ -16,13 +17,19 @@ const DefaultNodeRegistryBaseURL = "https://registry.npmjs.org"
 
 var now = time.Now
 
-func (r *nodeResolver) resolveRemote(packageName string, version string) (metadata, error) {
+func (r *nodeResolver) resolveRemote(packageName string, version string) (meta metadata, err error) {
 	cacheKey := makeNodePackageKey(packageName, version)
 	if cached, ok := r.cache[cacheKey]; ok {
 		return cached, nil
 	}
 
-	meta := metadata{
+	defer func() {
+		if err == nil && r.cache != nil {
+			r.cache[cacheKey] = meta
+		}
+	}()
+
+	meta = metadata{
 		RawLicense: "Unknown",
 		Holder:     packageName,
 		Year:       now().Year(),
@@ -85,6 +92,7 @@ func requestJSON(client *http.Client, endpoint string, service externalaccess.Se
 		return nil, err
 	}
 	req = externalaccess.WithRequestService(req, service)
+	req = httpcache.WithMaxResponseBytes(req, maxBytes)
 	req.Header.Set("User-Agent", "depaudit-license")
 	req.Header.Set("Accept", "application/json")
 

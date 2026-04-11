@@ -10,6 +10,9 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"depaudit-license/internal/scan"
+	"depaudit-license/internal/vuln"
 )
 
 const runtimeConfigVersionV1Alpha1 = "v1alpha1"
@@ -189,13 +192,13 @@ func defaultRuntimeConfig() config {
 		legalThemeCSSPath:        filepath.Join("templates", "legal_notice.css"),
 		vulnTemplatePath:         filepath.Join("templates", "vulnerability_checklist.html.tmpl"),
 		vulnThemeCSSPath:         filepath.Join("templates", "vulnerability_checklist.css"),
-		osvBaseURL:               "https://api.osv.dev",
-		gitHubAdvisoryBaseURL:    "https://api.github.com",
-		nvdBaseURL:               "https://services.nvd.nist.gov",
-		maxPackageArtifactBytes:  256 << 20,
-		maxPackageMetadataBytes:  1 << 20,
-		maxEmbeddedLicenseBytes:  4 << 20,
-		maxPackageArchiveEntries: 10000,
+		osvBaseURL:               vuln.DefaultOSVBaseURL,
+		gitHubAdvisoryBaseURL:    vuln.DefaultGitHubAdvisoryBaseURL,
+		nvdBaseURL:               vuln.DefaultNVDBaseURL,
+		maxPackageArtifactBytes:  scan.DefaultMaxPackageArtifactBytes,
+		maxPackageMetadataBytes:  scan.DefaultMaxPackageMetadataBytes,
+		maxEmbeddedLicenseBytes:  scan.DefaultMaxEmbeddedLicenseBytes,
+		maxPackageArchiveEntries: scan.DefaultMaxPackageArchiveEntries,
 		timeout:                  15 * time.Second,
 	}
 }

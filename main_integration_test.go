@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"depaudit-license/internal/testutil"
@@ -5389,7 +5390,9 @@ func TestRunMultiSourcePrefersLocalArtifactResolutionOverRemoteReview(t *testing
 		},
 	})
 
+	var requests atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
 		if r.URL.Path != "/react/18.2.0" {
 			http.NotFound(w, r)
 			return
@@ -5427,6 +5430,11 @@ func TestRunMultiSourcePrefersLocalArtifactResolutionOverRemoteReview(t *testing
 		t.Fatalf("read report json: %v", err)
 	}
 	var output struct {
+		Provenance struct {
+			ExternalSources []struct {
+				ID string `json:"id"`
+			} `json:"externalSources"`
+		} `json:"provenance"`
 		Report struct {
 			Packages []struct {
 				Name       string `json:"name"`
@@ -5471,6 +5479,12 @@ func TestRunMultiSourcePrefersLocalArtifactResolutionOverRemoteReview(t *testing
 	}
 	if got := stderr.String(); strings.Contains(got, "remote resolution fallback") {
 		t.Fatalf("unexpected stderr warning = %q", got)
+	}
+	if requests.Load() != 0 {
+		t.Fatalf("unexpected remote requests = %d", requests.Load())
+	}
+	if len(output.Provenance.ExternalSources) != 0 {
+		t.Fatalf("unexpected external sources = %#v", output.Provenance.ExternalSources)
 	}
 }
 

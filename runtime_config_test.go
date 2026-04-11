@@ -236,6 +236,40 @@ func TestParseFlagsUsesRuntimeConfigDefaults(t *testing.T) {
 	}
 }
 
+func TestParseFlagsSupportsDoubleDashConfigFlag(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	repoDir := filepath.Join(dir, "repo")
+	configPath := filepath.Join(dir, "depaudit-license.config.json")
+	if err := os.MkdirAll(repoDir, 0o755); err != nil {
+		t.Fatalf("mkdir repo dir: %v", err)
+	}
+	if err := os.WriteFile(configPath, []byte(`{
+  "version": "v1alpha1",
+  "inputs": ["repository-scan=repo"],
+  "outputHtml": "out/report.html"
+}`), 0o644); err != nil {
+		t.Fatalf("write runtime config: %v", err)
+	}
+
+	for _, args := range [][]string{
+		{"--config", configPath},
+		{"--config=" + configPath},
+	} {
+		cfg, err := parseFlags(args)
+		if err != nil {
+			t.Fatalf("parse flags %v: %v", args, err)
+		}
+		if len(cfg.inputs) != 1 || cfg.inputs[0].Location != repoDir {
+			t.Fatalf("inputs for %v = %#v", args, cfg.inputs)
+		}
+		if cfg.outputHTML != filepath.Join(dir, "out", "report.html") {
+			t.Fatalf("outputHTML for %v = %q", args, cfg.outputHTML)
+		}
+	}
+}
+
 func TestParseFlagsRuntimeConfigCLIAndEnvPrecedence(t *testing.T) {
 	t.Setenv("DEPAUDIT_LICENSE_GITHUB_ADVISORY_TOKEN", "env-github-token")
 	t.Setenv("DEPAUDIT_LICENSE_NVD_API_KEY", "env-nvd-key")

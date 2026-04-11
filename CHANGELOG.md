@@ -17,11 +17,12 @@ No notable changes yet.
 - Configurable HTTP response caching for external metadata and vulnerability APIs, including `off`, `use`, `refresh`, and `cache-only` modes with TTL control.
 - Configurable endpoint overrides for npm registry and NuGet registration metadata, alongside the existing OSV / GitHub Advisory / NVD base URL settings.
 - Optional GitHub Advisory token and NVD API key settings for environments that need higher external API limits.
-- Report JSON and vulnerability JSON provenance now record the selected external metadata and vulnerability endpoints in `externalSources`.
+- Report JSON and vulnerability JSON provenance now record the external metadata and vulnerability endpoints actually used during the run in `externalSources`.
 
 ### Changed
 
 - NuGet registration fallback now reads embedded `<license type="file">` evidence from package archives even when registration metadata also exposes `licenseUrl`, allowing review-only or file-based licenses to resolve out of `Unknown` when the package archive contains a recognizable license text.
+- Package-level provenance now distinguishes local package-manager artifact evidence from remote self-resolved fallback, records local evidence even for no-op enrichment, and emits manual-review-required warnings/diagnostics when no local package-manager artifact was available.
 - README and release-facing documentation now explicitly describe external network access, cache behavior, endpoint overrides, and authentication knobs for rate-limited APIs.
 - Shared HTTP cache keys are now partitioned by auth-sensitive request headers, and cache files are written with restricted permissions so mirrored or authenticated upstreams do not bleed into each other through a shared cache entry.
 

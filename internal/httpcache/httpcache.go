@@ -25,10 +25,11 @@ const (
 )
 
 type Config struct {
-	Mode          string
-	Dir           string
-	TTL           time.Duration
-	WarningWriter io.Writer
+	Mode            string
+	Dir             string
+	TTL             time.Duration
+	RequestObserver func(*http.Request)
+	WarningWriter   io.Writer
 }
 
 type cachedResponse struct {
@@ -72,10 +73,11 @@ func NormalizeConfig(cfg Config) Config {
 		dir = DefaultDir()
 	}
 	return Config{
-		Mode:          mode,
-		Dir:           dir,
-		TTL:           cfg.TTL,
-		WarningWriter: cfg.WarningWriter,
+		Mode:            mode,
+		Dir:             dir,
+		TTL:             cfg.TTL,
+		RequestObserver: cfg.RequestObserver,
+		WarningWriter:   cfg.WarningWriter,
 	}
 }
 
@@ -111,6 +113,9 @@ func WrapClient(client *http.Client, cfg Config) *http.Client {
 
 func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
 	cfg := NormalizeConfig(t.cfg)
+	if cfg.RequestObserver != nil {
+		cfg.RequestObserver(req)
+	}
 	if cfg.Mode == ModeOff {
 		return t.base.RoundTrip(req)
 	}

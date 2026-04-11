@@ -107,7 +107,7 @@ func TestApplyMetadataDoesNotOverwriteExistingFields(t *testing.T) {
 		t.Fatalf("load catalog: %v", err)
 	}
 
-	pkg, changed := applyMetadata(inventory.Package{
+	pkg, changed, sourceChanged := applyMetadata(inventory.Package{
 		RawLicense:     "Apache-2.0",
 		LicenseKey:     "Apache-2.0",
 		Repository:     "https://example.test/repo",
@@ -126,6 +126,9 @@ func TestApplyMetadataDoesNotOverwriteExistingFields(t *testing.T) {
 
 	if changed {
 		t.Fatal("expected no changes")
+	}
+	if sourceChanged {
+		t.Fatal("expected no source changes")
 	}
 	if pkg.Repository != "https://example.test/repo" {
 		t.Fatalf("repository = %q", pkg.Repository)
@@ -231,8 +234,8 @@ func TestMetadataLookupServiceEnrichPackageReturnsNoSourceWhenNoChangesApply(t *
 	}
 
 	pkg, source, changed := service.EnrichPackage(original)
-	if changed || source != nil {
-		t.Fatalf("expected no-op enrichment, got %#v %#v %v", pkg, source, changed)
+	if !changed || source != nil {
+		t.Fatalf("expected local artifact-only enrichment, got %#v %#v %v", pkg, source, changed)
 	}
 	if pkg.RawLicense != original.RawLicense ||
 		pkg.LicenseKey != original.LicenseKey ||
@@ -242,6 +245,9 @@ func TestMetadataLookupServiceEnrichPackageReturnsNoSourceWhenNoChangesApply(t *
 		pkg.MetadataSource != original.MetadataSource ||
 		!slices.Equal(pkg.Provenance.SourceIDs, original.Provenance.SourceIDs) {
 		t.Fatalf("package should remain unchanged: %#v", pkg)
+	}
+	if pkg.Provenance.ArtifactResolution == nil || pkg.Provenance.ArtifactResolution.Kind != "local-package-manager" || pkg.Provenance.ArtifactResolution.Detail != "node-modules" || pkg.Provenance.ArtifactResolution.ReviewRequired {
+		t.Fatalf("artifact resolution = %#v", pkg.Provenance.ArtifactResolution)
 	}
 }
 
@@ -283,6 +289,9 @@ func TestMetadataLookupServiceLookupBranches(t *testing.T) {
 	if !ok || meta.Source != "npm-registry-version" {
 		t.Fatalf("node lookup = %#v %v", meta, ok)
 	}
+	if meta.ArtifactResolution == nil || meta.ArtifactResolution.Kind != "remote-metadata" || !meta.ArtifactResolution.ReviewRequired {
+		t.Fatalf("node artifact resolution = %#v", meta.ArtifactResolution)
+	}
 
 	meta, ok = service.lookupMetadata(inventory.Package{
 		Ecosystem: "node",
@@ -313,6 +322,9 @@ func TestMetadataLookupServiceLookupBranches(t *testing.T) {
 	})
 	if !ok || meta.Source != "nuget-global-packages" {
 		t.Fatalf("dotnet lookup = %#v %v", meta, ok)
+	}
+	if meta.ArtifactResolution == nil || meta.ArtifactResolution.Kind != "local-package-manager" || meta.ArtifactResolution.Detail != "nuget-global-packages" {
+		t.Fatalf("dotnet artifact resolution = %#v", meta.ArtifactResolution)
 	}
 }
 
@@ -474,7 +486,7 @@ func TestApplyMetadataHelperBranches(t *testing.T) {
 		t.Fatalf("load catalog: %v", err)
 	}
 
-	pkg, changed := applyMetadata(inventory.Package{
+	pkg, changed, sourceChanged := applyMetadata(inventory.Package{
 		RawLicense: "MIT",
 		LicenseKey: "MIT",
 		Provenance: inventory.PackageProvenance{
@@ -487,8 +499,11 @@ func TestApplyMetadataHelperBranches(t *testing.T) {
 	if changed {
 		t.Fatalf("expected empty metadata to be ignored: %#v", pkg)
 	}
+	if sourceChanged {
+		t.Fatalf("expected empty metadata to avoid source changes: %#v", pkg)
+	}
 
-	pkg, changed = applyMetadata(inventory.Package{
+	pkg, changed, sourceChanged = applyMetadata(inventory.Package{
 		RawLicense: "Unknown",
 		LicenseKey: cat.Fallback,
 		Provenance: inventory.PackageProvenance{
@@ -501,8 +516,11 @@ func TestApplyMetadataHelperBranches(t *testing.T) {
 	if !changed || pkg.LicenseKey != "Unknown" || pkg.MetadataSource != "node-modules" {
 		t.Fatalf("expected unknown license metadata to seed fallback values: %#v %v", pkg, changed)
 	}
+	if !sourceChanged {
+		t.Fatalf("expected source changes for fallback license metadata: %#v", pkg)
+	}
 
-	pkg, changed = applyMetadata(inventory.Package{
+	pkg, changed, sourceChanged = applyMetadata(inventory.Package{
 		RawLicense:     "MIT",
 		LicenseKey:     "MIT",
 		MetadataSource: "node-modules",
@@ -517,8 +535,11 @@ func TestApplyMetadataHelperBranches(t *testing.T) {
 	if !changed || pkg.MetadataSource != "node-modules" || pkg.Homepage != "https://react.dev" {
 		t.Fatalf("same-source metadata apply = %#v %v", pkg, changed)
 	}
+	if !sourceChanged {
+		t.Fatalf("expected source changes for homepage metadata: %#v", pkg)
+	}
 
-	pkg, changed = applyMetadata(inventory.Package{
+	pkg, changed, sourceChanged = applyMetadata(inventory.Package{
 		RawLicense:     "MIT",
 		LicenseKey:     "MIT",
 		MetadataSource: "spdx-json",
@@ -533,8 +554,11 @@ func TestApplyMetadataHelperBranches(t *testing.T) {
 	if !changed || pkg.MetadataSource != "merged" {
 		t.Fatalf("merged metadata source = %#v %v", pkg, changed)
 	}
+	if !sourceChanged {
+		t.Fatalf("expected source changes for merged metadata: %#v", pkg)
+	}
 
-	pkg, changed = applyMetadata(inventory.Package{
+	pkg, changed, sourceChanged = applyMetadata(inventory.Package{
 		RawLicense:     "MIT",
 		LicenseKey:     "MIT",
 		Provenance:     inventory.PackageProvenance{},
@@ -555,6 +579,9 @@ func TestApplyMetadataHelperBranches(t *testing.T) {
 	}, cat, "enrich:node-modules")
 	if !changed {
 		t.Fatal("expected metadata fields to be applied")
+	}
+	if !sourceChanged {
+		t.Fatal("expected source changes when metadata fields are applied")
 	}
 	if pkg.CopyrightHolder != "Meta" || pkg.CopyrightYear != 2024 {
 		t.Fatalf("copyright metadata = %#v", pkg)

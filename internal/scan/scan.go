@@ -49,6 +49,7 @@ type metadata struct {
 	Source              string
 	EmbeddedLicensePath string
 	EmbeddedLicenseText string
+	ArtifactResolution  *inventory.ArtifactResolution
 }
 
 type nodePackageFile struct {
@@ -412,6 +413,10 @@ func (r *nodeResolver) resolveFromInstalledPackage(packageName string, version s
 		Source:              "node-modules",
 		EmbeddedLicensePath: licensePath,
 		EmbeddedLicenseText: licenseText,
+		ArtifactResolution: &inventory.ArtifactResolution{
+			Kind:   "local-package-manager",
+			Detail: "node-modules",
+		},
 	}
 	if strings.TrimSpace(meta.RawLicense) == "" {
 		meta.RawLicense = "Unknown"

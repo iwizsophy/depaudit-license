@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"depaudit-license/internal/externalaccess"
+	"depaudit-license/internal/inventory"
 )
 
 var now = time.Now
@@ -39,19 +40,20 @@ type SeverityStat struct {
 }
 
 type PackageFindingView struct {
-	Key            string            `json:"key"`
-	Name           string            `json:"name"`
-	Version        string            `json:"version,omitempty"`
-	Ecosystem      string            `json:"ecosystem,omitempty"`
-	PURL           string            `json:"purl,omitempty"`
-	Aliases        []string          `json:"aliases,omitempty"`
-	SourceIDs      []string          `json:"sourceIds,omitempty"`
-	FieldOrigins   map[string]string `json:"fieldOrigins,omitempty"`
-	ConflictFields []string          `json:"conflictFields,omitempty"`
-	QueryMethod    string            `json:"queryMethod,omitempty"`
-	SkippedReason  string            `json:"skippedReason,omitempty"`
-	Severity       string            `json:"severity"`
-	Advisories     []AdvisoryRef     `json:"advisories,omitempty"`
+	Key                string                        `json:"key"`
+	Name               string                        `json:"name"`
+	Version            string                        `json:"version,omitempty"`
+	Ecosystem          string                        `json:"ecosystem,omitempty"`
+	PURL               string                        `json:"purl,omitempty"`
+	Aliases            []string                      `json:"aliases,omitempty"`
+	SourceIDs          []string                      `json:"sourceIds,omitempty"`
+	FieldOrigins       map[string]string             `json:"fieldOrigins,omitempty"`
+	ConflictFields     []string                      `json:"conflictFields,omitempty"`
+	ArtifactResolution *inventory.ArtifactResolution `json:"artifactResolution,omitempty"`
+	QueryMethod        string                        `json:"queryMethod,omitempty"`
+	SkippedReason      string                        `json:"skippedReason,omitempty"`
+	Severity           string                        `json:"severity"`
+	Advisories         []AdvisoryRef                 `json:"advisories,omitempty"`
 }
 
 type ChecklistOutput struct {
@@ -116,19 +118,20 @@ func BuildChecklist(input AssessmentInput, pipeline PipelineResult) Checklist {
 		}
 		lookup[severity].Count++
 		items = append(items, PackageFindingView{
-			Key:            finding.Package.Key,
-			Name:           finding.Package.Name,
-			Version:        finding.Package.Version,
-			Ecosystem:      finding.Package.Ecosystem,
-			PURL:           finding.Package.PURL,
-			Aliases:        append([]string(nil), finding.Package.Aliases...),
-			SourceIDs:      append([]string(nil), finding.Package.SourceIDs...),
-			FieldOrigins:   cloneStringMap(finding.Package.FieldOrigins),
-			ConflictFields: append([]string(nil), finding.Package.ConflictFields...),
-			QueryMethod:    finding.Query.Method,
-			SkippedReason:  finding.SkippedReason,
-			Severity:       severity,
-			Advisories:     append([]AdvisoryRef(nil), finding.Advisories...),
+			Key:                finding.Package.Key,
+			Name:               finding.Package.Name,
+			Version:            finding.Package.Version,
+			Ecosystem:          finding.Package.Ecosystem,
+			PURL:               finding.Package.PURL,
+			Aliases:            append([]string(nil), finding.Package.Aliases...),
+			SourceIDs:          append([]string(nil), finding.Package.SourceIDs...),
+			FieldOrigins:       cloneStringMap(finding.Package.FieldOrigins),
+			ConflictFields:     append([]string(nil), finding.Package.ConflictFields...),
+			ArtifactResolution: cloneArtifactResolution(finding.Package.ArtifactResolution),
+			QueryMethod:        finding.Query.Method,
+			SkippedReason:      finding.SkippedReason,
+			Severity:           severity,
+			Advisories:         append([]AdvisoryRef(nil), finding.Advisories...),
 		})
 	}
 

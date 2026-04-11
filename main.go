@@ -84,7 +84,8 @@ func run(args []string, stdout io.Writer) error {
 	}
 
 	baseClient := &http.Client{Timeout: cfg.timeout}
-	cachedClient, err := buildHTTPClient(baseClient, cfg)
+	externalTracker := externalaccess.NewTracker(configuredExternalSources(cfg))
+	cachedClient, err := buildHTTPClient(baseClient, cfg, externalTracker.Observe)
 	if err != nil {
 		return err
 	}
@@ -182,6 +183,7 @@ func run(args []string, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
+	writeRemoteResolutionFallbackWarning(inputResult.Document)
 
 	view := report.BuildDocument(report.Config{
 		Root:            inputResult.Root,
@@ -216,7 +218,7 @@ func run(args []string, stdout io.Writer) error {
 	output := report.BuildOutput(view, report.OutputConfig{
 		InputKind:        inputResult.InputKind,
 		CatalogSources:   loadResult.SourceMetadata,
-		ExternalSources:  buildExternalSources(inputResult.Document, cfg),
+		ExternalSources:  externalTracker.Used(),
 		SelectedLocale:   textBundle.Locale,
 		EffectiveCatalog: loadResult.EffectiveCatalog,
 	})
@@ -255,7 +257,7 @@ func run(args []string, stdout io.Writer) error {
 			fmt.Fprintf(stdout, "generated vulnerability HTML: %s\n", cfg.outputVulnHTML)
 		}
 		if strings.TrimSpace(cfg.outputVulnJSON) != "" {
-			vulnJSON, err := json.MarshalIndent(vuln.BuildChecklistOutput(vulnInput, checklist, buildExternalSources(inputResult.Document, cfg)), "", "  ")
+			vulnJSON, err := json.MarshalIndent(vuln.BuildChecklistOutput(vulnInput, checklist, externalTracker.Used()), "", "  ")
 			if err != nil {
 				return err
 			}
@@ -528,15 +530,16 @@ func validateConfig(cfg config) error {
 	return nil
 }
 
-func buildHTTPClient(client *http.Client, cfg config) (*http.Client, error) {
+func buildHTTPClient(client *http.Client, cfg config, requestObserver func(*http.Request)) (*http.Client, error) {
 	if client == nil {
 		client = &http.Client{Timeout: cfg.timeout}
 	}
 	cacheCfg := httpcache.Config{
-		Mode:          cfg.httpCacheMode,
-		Dir:           cfg.httpCacheDir,
-		TTL:           cfg.httpCacheTTL,
-		WarningWriter: stderrOut,
+		Mode:            cfg.httpCacheMode,
+		Dir:             cfg.httpCacheDir,
+		TTL:             cfg.httpCacheTTL,
+		RequestObserver: requestObserver,
+		WarningWriter:   stderrOut,
 	}
 	if err := httpcache.ValidateConfig(cacheCfg); err != nil {
 		return nil, err
@@ -544,18 +547,7 @@ func buildHTTPClient(client *http.Client, cfg config) (*http.Client, error) {
 	return httpcache.WrapClient(client, cacheCfg), nil
 }
 
-func buildExternalSources(doc inventory.Document, cfg config) []externalaccess.Service {
-	hasNode := false
-	hasDotNet := false
-	for _, pkg := range doc.Packages {
-		switch strings.ToLower(strings.TrimSpace(pkg.Ecosystem)) {
-		case "node":
-			hasNode = true
-		case "dotnet":
-			hasDotNet = true
-		}
-	}
-
+func configuredExternalSources(cfg config) []externalaccess.Service {
 	cacheCfg := httpcache.NormalizeConfig(httpcache.Config{
 		Mode: cfg.httpCacheMode,
 		TTL:  cfg.httpCacheTTL,
@@ -578,12 +570,8 @@ func buildExternalSources(doc inventory.Document, cfg config) []externalaccess.S
 		})
 	}
 
-	if hasNode {
-		add("npm-registry", "metadata-enrichment", firstNonEmptyString(cfg.npmRegistryBaseURL, scan.DefaultNodeRegistryBaseURL), false)
-	}
-	if hasDotNet {
-		add("nuget-registration", "metadata-enrichment", firstNonEmptyString(cfg.nugetRegistrationURL, scan.DefaultNuGetRegistrationBaseURL), false)
-	}
+	add("npm-registry", "metadata-enrichment", firstNonEmptyString(cfg.npmRegistryBaseURL, scan.DefaultNodeRegistryBaseURL), false)
+	add("nuget-registration", "metadata-enrichment", firstNonEmptyString(cfg.nugetRegistrationURL, scan.DefaultNuGetRegistrationBaseURL), false)
 
 	switch strings.TrimSpace(cfg.vulnMode) {
 	case vuln.ModeOSVOnly:
@@ -602,6 +590,52 @@ func buildExternalSources(doc inventory.Document, cfg config) []externalaccess.S
 
 func vulnerabilityOutputsEnabled(cfg config) bool {
 	return strings.TrimSpace(cfg.outputVulnHTML) != "" || strings.TrimSpace(cfg.outputVulnJSON) != ""
+}
+
+func writeRemoteResolutionFallbackWarning(doc inventory.Document) {
+	packages := remoteResolutionFallbackPackages(doc)
+	if len(packages) == 0 {
+		return
+	}
+
+	labels := make([]string, 0, min(len(packages), 5))
+	for _, pkg := range packages {
+		label := strings.TrimSpace(pkg.Name)
+		if version := strings.TrimSpace(pkg.Version); version != "" {
+			label += "@" + version
+		}
+		labels = append(labels, label)
+		if len(labels) == 5 {
+			break
+		}
+	}
+
+	message := fmt.Sprintf("%d packages used remote resolution fallback because no local package-manager artifact was available; manual review required", len(packages))
+	if len(labels) > 0 {
+		message += ": " + strings.Join(labels, ", ")
+		if len(packages) > len(labels) {
+			message += fmt.Sprintf(" (+%d more)", len(packages)-len(labels))
+		}
+	}
+	fmt.Fprintf(stderrOut, "warning: %s\n", message)
+}
+
+func remoteResolutionFallbackPackages(doc inventory.Document) []inventory.Package {
+	result := make([]inventory.Package, 0)
+	for _, pkg := range doc.Packages {
+		if pkg.Provenance.ArtifactResolution == nil || !pkg.Provenance.ArtifactResolution.ReviewRequired {
+			continue
+		}
+		result = append(result, pkg)
+	}
+	return result
+}
+
+func min(left int, right int) int {
+	if left < right {
+		return left
+	}
+	return right
 }
 
 func resolveInputSources(values []string) ([]input.SourceSpec, error) {

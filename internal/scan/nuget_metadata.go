@@ -14,6 +14,9 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"depaudit-license/internal/externalaccess"
+	"depaudit-license/internal/inventory"
 )
 
 type nugetResolver struct {
@@ -132,6 +135,10 @@ func (r *nugetResolver) resolveFromGlobalPackages(packageName string, version st
 		Source:              "nuget-global-packages",
 		EmbeddedLicensePath: licensePath,
 		EmbeddedLicenseText: licenseText,
+		ArtifactResolution: &inventory.ArtifactResolution{
+			Kind:   "local-package-manager",
+			Detail: "nuget-global-packages",
+		},
 	}
 	return meta, true
 }
@@ -148,7 +155,12 @@ func (r *nugetResolver) resolveFromRegistration(packageName string, version stri
 		urlPathEscapeLower(version),
 	)
 
-	body, err := requestJSON(r.client, endpoint)
+	service := externalaccess.Service{
+		ID:      "nuget-registration",
+		Purpose: MetadataEnrichmentSourceKind,
+		BaseURL: r.resolveRegistrationBaseURL(),
+	}
+	body, err := requestJSON(r.client, endpoint, service)
 	if err != nil {
 		return metadata{}, false
 	}
@@ -161,7 +173,7 @@ func (r *nugetResolver) resolveFromRegistration(packageName string, version stri
 		return metadata{}, false
 	}
 
-	catalogBody, err := requestJSON(r.client, leaf.CatalogEntry)
+	catalogBody, err := requestJSON(r.client, leaf.CatalogEntry, service)
 	if err != nil {
 		return metadata{}, false
 	}
@@ -174,11 +186,23 @@ func (r *nugetResolver) resolveFromRegistration(packageName string, version stri
 	licenseValue := firstNonEmpty(entry.LicenseExpression, entry.LicenseURL)
 	licensePath := ""
 	licenseText := ""
+	artifactResolution := &inventory.ArtifactResolution{
+		Kind:           "remote-metadata",
+		Detail:         "nuget-registration",
+		ReviewRequired: true,
+		ReviewReason:   "local-package-manager-artifact-not-available",
+	}
 	if strings.TrimSpace(entry.LicenseExpression) == "" && strings.TrimSpace(leaf.PackageContent) != "" {
 		var err error
 		licensePath, licenseText, err = r.resolveEmbeddedLicenseFromPackageContent(leaf.PackageContent)
 		if err == nil && licenseText != "" {
 			licenseValue = licensePath
+			artifactResolution = &inventory.ArtifactResolution{
+				Kind:           "remote-package-content",
+				Detail:         "nuget-package-content",
+				ReviewRequired: true,
+				ReviewReason:   "local-package-manager-artifact-not-available",
+			}
 		}
 	}
 
@@ -191,6 +215,7 @@ func (r *nugetResolver) resolveFromRegistration(packageName string, version stri
 		Source:              "nuget-registration",
 		EmbeddedLicensePath: licensePath,
 		EmbeddedLicenseText: licenseText,
+		ArtifactResolution:  artifactResolution,
 	}
 	if strings.TrimSpace(meta.Repository) == "" {
 		meta.Repository = meta.Homepage
@@ -276,6 +301,11 @@ func (r *nugetResolver) resolveEmbeddedLicenseFromPackageContent(packageContentU
 	if err != nil {
 		return "", "", err
 	}
+	req = externalaccess.WithRequestService(req, externalaccess.Service{
+		ID:      "nuget-registration",
+		Purpose: MetadataEnrichmentSourceKind,
+		BaseURL: externalaccess.OriginFromURL(packageContentURL),
+	})
 	req.Header.Set("User-Agent", "depaudit-license")
 
 	resp, err := r.client.Do(req)

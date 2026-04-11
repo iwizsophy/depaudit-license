@@ -1,8 +1,10 @@
 package enrich
 
 import (
+	"fmt"
 	"net/http"
 	"slices"
+	"strings"
 
 	"depaudit-license/internal/catalog"
 	"depaudit-license/internal/inventory"
@@ -38,6 +40,9 @@ func Apply(cfg Config, doc inventory.Document) (inventory.Document, error) {
 		result.Packages[index] = enriched
 		if source != nil && !hasSource(result.Sources, source.ID) {
 			result.Sources = append(result.Sources, *source)
+		}
+		if diagnostic, ok := remoteResolutionFallbackDiagnostic(enriched, source); ok {
+			result.Diagnostics = append(result.Diagnostics, diagnostic)
 		}
 	}
 
@@ -78,6 +83,10 @@ func clonePackages(packages []inventory.Package) []inventory.Package {
 				cloned[index].Provenance.FieldOrigins[field] = origin
 			}
 		}
+		if pkg.Provenance.ArtifactResolution != nil {
+			resolution := *pkg.Provenance.ArtifactResolution
+			cloned[index].Provenance.ArtifactResolution = &resolution
+		}
 	}
 	return cloned
 }
@@ -115,4 +124,28 @@ func hasSource(sources []inventory.Source, id string) bool {
 		}
 	}
 	return false
+}
+
+func remoteResolutionFallbackDiagnostic(pkg inventory.Package, source *inventory.Source) (inventory.Diagnostic, bool) {
+	if pkg.Provenance.ArtifactResolution == nil || !pkg.Provenance.ArtifactResolution.ReviewRequired {
+		return inventory.Diagnostic{}, false
+	}
+
+	sourceID := ""
+	if source != nil {
+		sourceID = strings.TrimSpace(source.ID)
+	}
+	packageName := strings.TrimSpace(pkg.Name)
+	if version := strings.TrimSpace(pkg.Version); version != "" {
+		packageName += "@" + version
+	}
+
+	return inventory.Diagnostic{
+		SourceID:  sourceID,
+		Code:      "remote_resolution_fallback_used",
+		Severity:  "warning",
+		Message:   fmt.Sprintf("%s used remote resolution fallback (%s); manual review required", packageName, strings.TrimSpace(pkg.Provenance.ArtifactResolution.ReviewReason)),
+		Ecosystem: strings.TrimSpace(pkg.Ecosystem),
+		Project:   strings.TrimSpace(pkg.Project),
+	}, true
 }

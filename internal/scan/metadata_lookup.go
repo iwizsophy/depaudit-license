@@ -57,9 +57,12 @@ func (s *MetadataLookupService) EnrichPackage(pkg inventory.Package) (inventory.
 		Kind:     MetadataEnrichmentSourceKind,
 		Location: strings.TrimSpace(meta.Source),
 	}
-	enriched, changed := applyMetadata(pkg, meta, s.catalog, source.ID)
+	enriched, changed, sourceChanged := applyMetadata(pkg, meta, s.catalog, source.ID)
 	if !changed {
 		return pkg, nil, false
+	}
+	if !sourceChanged {
+		return enriched, nil, true
 	}
 	return enriched, &source, true
 }
@@ -94,8 +97,9 @@ func (s *MetadataLookupService) nodeProjectDirs(pkg inventory.Package) []string 
 	return uniqueNonEmpty(dirs)
 }
 
-func applyMetadata(pkg inventory.Package, meta metadata, cat *catalog.Catalog, sourceID string) (inventory.Package, bool) {
+func applyMetadata(pkg inventory.Package, meta metadata, cat *catalog.Catalog, sourceID string) (inventory.Package, bool, bool) {
 	changed := false
+	sourceChanged := false
 	if pkg.Provenance.FieldOrigins == nil {
 		pkg.Provenance.FieldOrigins = map[string]string{}
 	}
@@ -104,45 +108,58 @@ func applyMetadata(pkg inventory.Package, meta metadata, cat *catalog.Catalog, s
 		pkg.RawLicense = strings.TrimSpace(meta.RawLicense)
 		pkg.Provenance.FieldOrigins["rawLicense"] = sourceID
 		changed = true
+		sourceChanged = true
 	}
 	if isMissingLicenseKey(pkg.LicenseKey, cat) {
 		if key := resolveLicenseKeyFromMetadata(pkg, meta, cat); key != "" {
 			pkg.LicenseKey = key
 			pkg.Provenance.FieldOrigins["licenseKey"] = sourceID
 			changed = true
+			sourceChanged = true
 		}
 	}
 	if strings.TrimSpace(pkg.Repository) == "" && strings.TrimSpace(meta.Repository) != "" {
 		pkg.Repository = strings.TrimSpace(meta.Repository)
 		pkg.Provenance.FieldOrigins["repository"] = sourceID
 		changed = true
+		sourceChanged = true
 	}
 	if strings.TrimSpace(pkg.Homepage) == "" && strings.TrimSpace(meta.Homepage) != "" {
 		pkg.Homepage = strings.TrimSpace(meta.Homepage)
 		pkg.Provenance.FieldOrigins["homepage"] = sourceID
 		changed = true
+		sourceChanged = true
 	}
 	if strings.TrimSpace(pkg.CopyrightHolder) == "" && strings.TrimSpace(meta.Holder) != "" {
 		pkg.CopyrightHolder = strings.TrimSpace(meta.Holder)
 		pkg.Provenance.FieldOrigins["copyrightHolder"] = sourceID
 		changed = true
+		sourceChanged = true
 	}
 	if pkg.CopyrightYear == 0 && meta.Year != 0 {
 		pkg.CopyrightYear = meta.Year
 		pkg.Provenance.FieldOrigins["copyrightYear"] = sourceID
 		changed = true
+		sourceChanged = true
 	}
 	if strings.TrimSpace(pkg.EmbeddedLicensePath) == "" && strings.TrimSpace(meta.EmbeddedLicensePath) != "" {
 		pkg.EmbeddedLicensePath = strings.TrimSpace(meta.EmbeddedLicensePath)
 		pkg.Provenance.FieldOrigins["embeddedLicensePath"] = sourceID
 		changed = true
+		sourceChanged = true
 	}
 	if strings.TrimSpace(pkg.EmbeddedLicenseText) == "" && strings.TrimSpace(meta.EmbeddedLicenseText) != "" {
 		pkg.EmbeddedLicenseText = strings.TrimSpace(meta.EmbeddedLicenseText)
 		pkg.Provenance.FieldOrigins["embeddedLicenseText"] = sourceID
 		changed = true
+		sourceChanged = true
 	}
-	if changed {
+	if pkg.Provenance.ArtifactResolution == nil && meta.ArtifactResolution != nil {
+		resolution := *meta.ArtifactResolution
+		pkg.Provenance.ArtifactResolution = &resolution
+		changed = true
+	}
+	if sourceChanged {
 		switch current := strings.TrimSpace(pkg.MetadataSource); {
 		case current == "":
 			pkg.MetadataSource = strings.TrimSpace(meta.Source)
@@ -152,7 +169,7 @@ func applyMetadata(pkg inventory.Package, meta metadata, cat *catalog.Catalog, s
 		pkg.Provenance.FieldOrigins["metadataSource"] = sourceID
 		pkg.Provenance.SourceIDs = uniqueNonEmpty(append(pkg.Provenance.SourceIDs, sourceID))
 	}
-	return pkg, changed
+	return pkg, changed, sourceChanged
 }
 
 func resolveLicenseKeyFromMetadata(pkg inventory.Package, meta metadata, cat *catalog.Catalog) string {

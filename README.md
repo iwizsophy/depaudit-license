@@ -234,7 +234,9 @@ External metadata / vulnerability API behavior:
 
 `-http-cache-*` applies to package metadata enrichment and vulnerability APIs. Remote license catalog URLs continue to use `-remote-catalog-mode` / `-remote-catalog-cache-dir` so stale-fallback behavior remains catalog-specific.
 
-The selected external metadata and vulnerability endpoints are also recorded in report JSON and vulnerability JSON as `provenance.externalSources`. Remote license catalog URLs continue to appear in `provenance.catalogSources`.
+The external metadata and vulnerability endpoints actually used during the run are recorded in report JSON and vulnerability JSON as `provenance.externalSources`. Remote license catalog URLs continue to appear in `provenance.catalogSources`.
+
+Package-level provenance can also record `provenance.artifactResolution`. Local package-manager artifacts such as `node_modules` or NuGet `global-packages` are preferred and can be recorded even when enrichment does not need to overwrite any package fields. When no local package-manager artifact is available and the resolver has to rely on a remote source, the package is marked with `reviewRequired: true`, a warning is emitted to stderr, and report JSON includes a `remote_resolution_fallback_used` diagnostic so the result can be reviewed separately from local-artifact-backed evidence.
 
 Recommended patterns:
 

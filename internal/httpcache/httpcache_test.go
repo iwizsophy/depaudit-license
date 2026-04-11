@@ -359,6 +359,71 @@ func TestWrapClientWarnsWhenCacheWriteFails(t *testing.T) {
 	}
 }
 
+func TestWrapClientInvokesRequestObserverOnCacheHit(t *testing.T) {
+	t.Parallel()
+
+	cacheDir := t.TempDir()
+	observed := 0
+	client := WrapClient(&http.Client{
+		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     make(http.Header),
+				Body:       io.NopCloser(bytes.NewBufferString(`{"ok":true}`)),
+			}, nil
+		}),
+	}, Config{
+		Mode: ModeUse,
+		Dir:  cacheDir,
+		TTL:  time.Hour,
+		RequestObserver: func(req *http.Request) {
+			observed++
+		},
+	})
+
+	for i := 0; i < 2; i++ {
+		resp, err := client.Get("https://example.test/pkg/react")
+		if err != nil {
+			t.Fatalf("get response %d: %v", i, err)
+		}
+		resp.Body.Close()
+	}
+
+	if observed != 2 {
+		t.Fatalf("observer count = %d", observed)
+	}
+}
+
+func TestWrapClientInvokesRequestObserverWhenCacheDisabled(t *testing.T) {
+	t.Parallel()
+
+	observed := 0
+	client := WrapClient(&http.Client{
+		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     make(http.Header),
+				Body:       io.NopCloser(bytes.NewBufferString(`{"ok":true}`)),
+			}, nil
+		}),
+	}, Config{
+		Mode: ModeOff,
+		RequestObserver: func(req *http.Request) {
+			observed++
+		},
+	})
+
+	resp, err := client.Get("https://example.test/pkg/react")
+	if err != nil {
+		t.Fatalf("get response: %v", err)
+	}
+	resp.Body.Close()
+
+	if observed != 1 {
+		t.Fatalf("observer count = %d", observed)
+	}
+}
+
 func TestValidateConfigRejectsInvalidValues(t *testing.T) {
 	t.Parallel()
 

@@ -8,6 +8,8 @@ import (
 	"io"
 	"net/http"
 	"strings"
+
+	"depaudit-license/internal/externalaccess"
 )
 
 const DefaultOSVBaseURL = "https://api.osv.dev"
@@ -118,7 +120,7 @@ func (c OSVClient) QueryBatch(ctx context.Context, input AssessmentInput) (Asses
 	pendingQueries := queries
 	pendingIndices := queryIndexMap
 	for len(pendingQueries) > 0 {
-		response, err := executeOSVQueryBatch(ctx, client, baseURL+"/v1/querybatch", pendingQueries)
+		response, err := executeOSVQueryBatch(ctx, client, baseURL, pendingQueries)
 		if err != nil {
 			return Assessment{}, err
 		}
@@ -208,16 +210,22 @@ func normalizeOSVEcosystem(value string) string {
 	}
 }
 
-func executeOSVQueryBatch(ctx context.Context, client *http.Client, endpoint string, queries []osvBatchQuery) (osvQueryBatchResponse, error) {
+func executeOSVQueryBatch(ctx context.Context, client *http.Client, baseURL string, queries []osvBatchQuery) (osvQueryBatchResponse, error) {
 	payload, err := json.Marshal(osvQueryBatchRequest{Queries: queries})
 	if err != nil {
 		return osvQueryBatchResponse{}, err
 	}
 
+	endpoint := strings.TrimRight(strings.TrimSpace(baseURL), "/") + "/v1/querybatch"
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(payload))
 	if err != nil {
 		return osvQueryBatchResponse{}, err
 	}
+	req = externalaccess.WithRequestService(req, externalaccess.Service{
+		ID:      "osv",
+		Purpose: "vulnerability",
+		BaseURL: baseURL,
+	})
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", "depaudit-license")

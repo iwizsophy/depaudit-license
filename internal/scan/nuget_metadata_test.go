@@ -65,6 +65,9 @@ func TestNugetResolverUsesGlobalPackagesNuspec(t *testing.T) {
 	if meta.Source != "nuget-global-packages" {
 		t.Fatalf("source = %q", meta.Source)
 	}
+	if meta.ArtifactResolution == nil || meta.ArtifactResolution.Kind != "local-package-manager" || meta.ArtifactResolution.Detail != "nuget-global-packages" || meta.ArtifactResolution.ReviewRequired {
+		t.Fatalf("artifact resolution = %#v", meta.ArtifactResolution)
+	}
 }
 
 func TestNugetResolverReadsEmbeddedLicenseFileFromGlobalPackages(t *testing.T) {
@@ -181,6 +184,9 @@ func TestNugetResolverFallsBackToRegistration(t *testing.T) {
 	if meta.Source != "nuget-registration" {
 		t.Fatalf("source = %q", meta.Source)
 	}
+	if meta.ArtifactResolution == nil || meta.ArtifactResolution.Kind != "remote-metadata" || meta.ArtifactResolution.Detail != "nuget-registration" || !meta.ArtifactResolution.ReviewRequired {
+		t.Fatalf("artifact resolution = %#v", meta.ArtifactResolution)
+	}
 }
 
 func TestNugetResolverReadsEmbeddedLicenseFileFromPackageArchive(t *testing.T) {
@@ -230,6 +236,9 @@ func TestNugetResolverReadsEmbeddedLicenseFileFromPackageArchive(t *testing.T) {
 	}
 	if meta.EmbeddedLicenseText != "archive embedded license" {
 		t.Fatalf("license text = %q", meta.EmbeddedLicenseText)
+	}
+	if meta.ArtifactResolution == nil || meta.ArtifactResolution.Kind != "remote-package-content" || !meta.ArtifactResolution.ReviewRequired {
+		t.Fatalf("artifact resolution = %#v", meta.ArtifactResolution)
 	}
 }
 
@@ -287,6 +296,9 @@ func TestNugetResolverPrefersEmbeddedLicenseFileOverRegistrationLicenseURL(t *te
 	if meta.EmbeddedLicensePath != "LICENSE.txt" || meta.EmbeddedLicenseText != "archive embedded license" {
 		t.Fatalf("embedded license metadata = %#v", meta)
 	}
+	if meta.ArtifactResolution == nil || meta.ArtifactResolution.Kind != "remote-package-content" || !meta.ArtifactResolution.ReviewRequired {
+		t.Fatalf("artifact resolution = %#v", meta.ArtifactResolution)
+	}
 }
 
 func TestNugetResolverRegistrationFieldFallbacks(t *testing.T) {
@@ -320,6 +332,9 @@ func TestNugetResolverRegistrationFieldFallbacks(t *testing.T) {
 	}
 	if meta.Holder != "Fallback.Package" || meta.Repository != "https://example.test/fallback" || meta.RawLicense != "Unknown" {
 		t.Fatalf("registration fallback metadata = %#v", meta)
+	}
+	if meta.ArtifactResolution == nil || meta.ArtifactResolution.Kind != "remote-metadata" || !meta.ArtifactResolution.ReviewRequired {
+		t.Fatalf("artifact resolution = %#v", meta.ArtifactResolution)
 	}
 }
 
@@ -355,6 +370,9 @@ func TestNugetResolverRegistrationUsesLicenseURLWhenExpressionMissing(t *testing
 	}
 	if meta.RawLicense != "https://licenses.nuget.org/MIT" {
 		t.Fatalf("raw license = %q", meta.RawLicense)
+	}
+	if meta.ArtifactResolution == nil || meta.ArtifactResolution.Kind != "remote-metadata" || !meta.ArtifactResolution.ReviewRequired {
+		t.Fatalf("artifact resolution = %#v", meta.ArtifactResolution)
 	}
 }
 
@@ -663,6 +681,9 @@ func TestNugetResolverResolveHelperBranches(t *testing.T) {
 	if got.EmbeddedLicensePath != "LICENSE.txt" || got.EmbeddedLicenseText != "embedded license" {
 		t.Fatalf("embedded license resolve = %#v", got)
 	}
+	if got.ArtifactResolution == nil || got.ArtifactResolution.Kind != "remote-package-content" || !got.ArtifactResolution.ReviewRequired {
+		t.Fatalf("artifact resolution = %#v", got.ArtifactResolution)
+	}
 	if cached := resolver.cache["sample.package/1.2.3"]; cached.Source != "nuget-registration" {
 		t.Fatalf("cache after resolve = %#v", cached)
 	}
@@ -725,5 +746,8 @@ func TestNugetResolverResolvePrefersGlobalPackagesOverRegistration(t *testing.T)
 	got := resolver.resolve("Sample.Package", "1.2.3")
 	if got.Source != "nuget-global-packages" || got.Holder != "Local Author" {
 		t.Fatalf("preferred source = %#v", got)
+	}
+	if got.ArtifactResolution == nil || got.ArtifactResolution.Kind != "local-package-manager" || got.ArtifactResolution.Detail != "nuget-global-packages" {
+		t.Fatalf("artifact resolution = %#v", got.ArtifactResolution)
 	}
 }

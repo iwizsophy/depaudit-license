@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"depaudit-license/internal/externalaccess"
+	"depaudit-license/internal/inventory"
 )
 
 func setTestNow(t *testing.T, instant time.Time) {
@@ -243,6 +244,12 @@ func TestBuildChecklistPreservesPackageProvenanceInOutput(t *testing.T) {
 					SourceIDs:      []string{"repo-scan", "sbom"},
 					FieldOrigins:   map[string]string{"repository": "repo-scan", "licenseKey": "sbom"},
 					ConflictFields: []string{"repository"},
+					ArtifactResolution: &inventory.ArtifactResolution{
+						Kind:           "remote-metadata",
+						Detail:         "npm-registry-version",
+						ReviewRequired: true,
+						ReviewReason:   "local-package-manager-artifact-not-available",
+					},
 				},
 				Query: QueryRef{Method: "purl"},
 				Advisories: []AdvisoryRef{
@@ -270,6 +277,9 @@ func TestBuildChecklistPreservesPackageProvenanceInOutput(t *testing.T) {
 	}
 	if !slices.Equal(finding.ConflictFields, []string{"repository"}) {
 		t.Fatalf("conflict fields = %#v", finding.ConflictFields)
+	}
+	if finding.ArtifactResolution == nil || finding.ArtifactResolution.Kind != "remote-metadata" || !finding.ArtifactResolution.ReviewRequired {
+		t.Fatalf("artifact resolution = %#v", finding.ArtifactResolution)
 	}
 
 	output := BuildChecklistOutput(input, checklist, []externalaccess.Service{

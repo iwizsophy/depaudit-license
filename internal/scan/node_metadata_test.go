@@ -33,6 +33,9 @@ func TestNodeResolverUsesInstalledPackageMetadata(t *testing.T) {
 	if meta.Source != "node-modules" {
 		t.Fatalf("source = %q", meta.Source)
 	}
+	if meta.ArtifactResolution == nil || meta.ArtifactResolution.Kind != "local-package-manager" || meta.ArtifactResolution.Detail != "node-modules" || meta.ArtifactResolution.ReviewRequired {
+		t.Fatalf("artifact resolution = %#v", meta.ArtifactResolution)
+	}
 	if meta.RawLicense != "MIT" {
 		t.Fatalf("raw license = %q", meta.RawLicense)
 	}
@@ -68,6 +71,9 @@ func TestNodeResolverFallsBackToExactRegistryVersion(t *testing.T) {
 	meta := resolver.resolve("react", "18.2.0", t.TempDir())
 	if meta.Source != "npm-registry-version" {
 		t.Fatalf("source = %q", meta.Source)
+	}
+	if meta.ArtifactResolution == nil || meta.ArtifactResolution.Kind != "remote-metadata" || meta.ArtifactResolution.Detail != "npm-registry-version" || !meta.ArtifactResolution.ReviewRequired {
+		t.Fatalf("artifact resolution = %#v", meta.ArtifactResolution)
 	}
 	if meta.RawLicense != "MIT" {
 		t.Fatalf("raw license = %q", meta.RawLicense)

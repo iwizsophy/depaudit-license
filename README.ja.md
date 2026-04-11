@@ -234,7 +234,9 @@ remote catalog の挙動:
 
 `-http-cache-*` は package metadata enrichment と vulnerability API に適用されます。remote license catalog URL については、引き続き `-remote-catalog-mode` / `-remote-catalog-cache-dir` を使い、stale-fallback は catalog 専用挙動として扱います。
 
-選択された external metadata / vulnerability endpoint は、report JSON と vulnerability JSON の `provenance.externalSources` にも記録されます。remote license catalog URL は引き続き `provenance.catalogSources` に出力されます。
+run 中に実際に使用された external metadata / vulnerability endpoint は、report JSON と vulnerability JSON の `provenance.externalSources` にも記録されます。remote license catalog URL は引き続き `provenance.catalogSources` に出力されます。
+
+package 単位では `provenance.artifactResolution` も記録されます。`node_modules` や NuGet `global-packages` のような local package-manager artifact を優先し、field を上書きしない no-op enrichment でも local 根拠を保持できます。local package-manager artifact を確認できず remote を根拠にした場合は `reviewRequired: true` を付け、stderr warning と report JSON の `remote_resolution_fallback_used` diagnostic で明示します。つまり、local artifact に基づく結果と分けて review できるようにします。
 
 推奨パターン:
 

@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"depaudit-license/internal/input"
-	"depaudit-license/internal/inventory"
 )
 
 var mainSeamMu sync.Mutex
@@ -196,15 +195,10 @@ func TestParseFlagsRejectsInvalidHTTPCacheConfig(t *testing.T) {
 	}
 }
 
-func TestBuildExternalSourcesUsesConfiguredEndpoints(t *testing.T) {
+func TestConfiguredExternalSourcesUsesConfiguredEndpoints(t *testing.T) {
 	t.Parallel()
 
-	sources := buildExternalSources(inventory.Document{
-		Packages: []inventory.Package{
-			{Ecosystem: "node"},
-			{Ecosystem: "dotnet"},
-		},
-	}, config{
+	sources := configuredExternalSources(config{
 		httpCacheMode:         "use",
 		httpCacheTTL:          48 * time.Hour,
 		npmRegistryBaseURL:    "https://npm.example.test",

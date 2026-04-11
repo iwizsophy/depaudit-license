@@ -340,6 +340,10 @@ func clonePackages(packages []inventory.Package) []inventory.Package {
 				cloned[index].Provenance.FieldOrigins[field] = origin
 			}
 		}
+		if pkg.Provenance.ArtifactResolution != nil {
+			resolution := *pkg.Provenance.ArtifactResolution
+			cloned[index].Provenance.ArtifactResolution = &resolution
+		}
 	}
 	return cloned
 }

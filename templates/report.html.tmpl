@@ -134,6 +134,7 @@
                   {{.Ecosystem}} / {{.Project}} / {{.DependencyType}} / {{.Version}}
                   {{if .CopyrightHolder}}<br>Copyright: {{.CopyrightYear}} {{.CopyrightHolder}}{{end}}
                   {{if .RawLicense}}<br>Raw license: {{.RawLicense}}{{end}}
+                  {{if .Provenance.ArtifactResolution}}<br>Artifact resolution: {{.Provenance.ArtifactResolution.Kind}}{{if .Provenance.ArtifactResolution.Detail}} / {{.Provenance.ArtifactResolution.Detail}}{{end}}{{if .Provenance.ArtifactResolution.ReviewRequired}} / manual review required{{end}}{{if .Provenance.ArtifactResolution.ReviewReason}} ({{.Provenance.ArtifactResolution.ReviewReason}}){{end}}{{end}}
                 </div>
                 {{if or .Repository .Homepage}}
                 <div class="links">
@@ -171,6 +172,7 @@
           <div>{{.Ecosystem}} / {{.Project}}</div>
           <div>{{.DependencyType}} / {{.Version}}</div>
           <div>License: {{.LicenseKey}}</div>
+          {{if .Provenance.ArtifactResolution}}<div>Artifact: {{.Provenance.ArtifactResolution.Kind}}{{if .Provenance.ArtifactResolution.ReviewRequired}} / manual review required{{end}}</div>{{end}}
         </article>
         {{end}}
       </div>

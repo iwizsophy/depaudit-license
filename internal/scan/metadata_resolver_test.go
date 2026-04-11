@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"depaudit-license/internal/externalaccess"
 	"depaudit-license/internal/testutil"
 )
 
@@ -16,14 +17,14 @@ type roundTripFunc = testutil.RoundTripFunc
 func TestRequestJSONHandlesStatusAndTransportErrors(t *testing.T) {
 	t.Parallel()
 
-	if _, err := requestJSON(&http.Client{}, "://bad-url"); err == nil {
+	if _, err := requestJSON(&http.Client{}, "://bad-url", externalaccess.Service{}); err == nil {
 		t.Fatal("expected invalid URL error")
 	}
 
 	client := &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		return nil, errors.New("boom")
 	})}
-	if _, err := requestJSON(client, "https://example.test"); err == nil {
+	if _, err := requestJSON(client, "https://example.test", externalaccess.Service{}); err == nil {
 		t.Fatal("expected transport error")
 	}
 
@@ -34,7 +35,7 @@ func TestRequestJSONHandlesStatusAndTransportErrors(t *testing.T) {
 			Header:     make(http.Header),
 		}, nil
 	})}
-	if _, err := requestJSON(client, "https://example.test"); err == nil {
+	if _, err := requestJSON(client, "https://example.test", externalaccess.Service{}); err == nil {
 		t.Fatal("expected status error")
 	}
 
@@ -45,7 +46,7 @@ func TestRequestJSONHandlesStatusAndTransportErrors(t *testing.T) {
 			Header:     make(http.Header),
 		}, nil
 	})}
-	if _, err := requestJSON(client, "https://example.test"); err == nil {
+	if _, err := requestJSON(client, "https://example.test", externalaccess.Service{}); err == nil {
 		t.Fatal("expected body read error")
 	}
 }
@@ -65,7 +66,7 @@ func TestRequestJSONSetsAcceptAndUserAgentHeaders(t *testing.T) {
 		}, nil
 	})}
 
-	body, err := requestJSON(client, "https://example.test/pkg/react")
+	body, err := requestJSON(client, "https://example.test/pkg/react", externalaccess.Service{})
 	if err != nil {
 		t.Fatalf("requestJSON: %v", err)
 	}
@@ -155,6 +156,9 @@ func TestNodeResolverResolveHelperBranches(t *testing.T) {
 	if got.Source != "npm-registry-version" || got.RawLicense != "MIT" {
 		t.Fatalf("registry resolve = %#v", got)
 	}
+	if got.ArtifactResolution == nil || got.ArtifactResolution.Kind != "remote-metadata" || got.ArtifactResolution.Detail != "npm-registry-version" || !got.ArtifactResolution.ReviewRequired {
+		t.Fatalf("artifact resolution = %#v", got.ArtifactResolution)
+	}
 	if cached := resolver.cache["react@19.2.4"]; cached.Source != "npm-registry-version" {
 		t.Fatalf("cache after registry resolve = %#v", cached)
 	}
@@ -206,6 +210,9 @@ func TestNodeResolverResolveBuildsEscapedEndpointAndNormalizesPartialRegistryMet
 	}
 	if got.Source != "npm-registry-version" {
 		t.Fatalf("source = %q", got.Source)
+	}
+	if got.ArtifactResolution == nil || got.ArtifactResolution.Kind != "remote-metadata" || !got.ArtifactResolution.ReviewRequired {
+		t.Fatalf("artifact resolution = %#v", got.ArtifactResolution)
 	}
 	if got.RawLicense != "Unknown" {
 		t.Fatalf("raw license = %q", got.RawLicense)

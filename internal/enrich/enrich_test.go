@@ -1,11 +1,14 @@
 package enrich
 
 import (
+	"archive/zip"
+	"bytes"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"depaudit-license/internal/catalog"
@@ -92,6 +95,9 @@ func TestApplyFillsMissingNodeMetadataWithoutOverwritingSBOMValues(t *testing.T)
 	}
 	if len(enriched.Sources) != 2 {
 		t.Fatalf("sources = %#v", enriched.Sources)
+	}
+	if pkg.Provenance.ArtifactResolution == nil || pkg.Provenance.ArtifactResolution.Kind != "local-package-manager" || pkg.Provenance.ArtifactResolution.Detail != "node-modules" {
+		t.Fatalf("artifact resolution = %#v", pkg.Provenance.ArtifactResolution)
 	}
 }
 
@@ -188,6 +194,175 @@ func TestApplyUsesRegistryAndGlobalPackagesForMissingMetadata(t *testing.T) {
 	}
 	if nugetPkg.MetadataSource != "nuget-global-packages" {
 		t.Fatalf("nuget metadata source = %q", nugetPkg.MetadataSource)
+	}
+	if nugetPkg.Provenance.ArtifactResolution == nil || nugetPkg.Provenance.ArtifactResolution.Kind != "local-package-manager" || nugetPkg.Provenance.ArtifactResolution.Detail != "nuget-global-packages" {
+		t.Fatalf("nuget artifact resolution = %#v", nugetPkg.Provenance.ArtifactResolution)
+	}
+}
+
+func TestApplyMarksRemoteNuGetArtifactFallbackForReview(t *testing.T) {
+	t.Parallel()
+
+	cat, err := catalog.Load(filepath.Join("..", "..", "configs", "licenses.json"))
+	if err != nil {
+		t.Fatalf("load catalog: %v", err)
+	}
+
+	var archive bytes.Buffer
+	writer := zip.NewWriter(&archive)
+	nuspec, err := writer.Create("Sample.Package.nuspec")
+	if err != nil {
+		t.Fatalf("create nuspec: %v", err)
+	}
+	if _, err := nuspec.Write([]byte(`<?xml version="1.0" encoding="utf-8"?>
+<package>
+  <metadata>
+    <id>Sample.Package</id>
+    <version>1.2.3</version>
+    <authors>Sample Author</authors>
+    <license type="file">LICENSE.txt</license>
+  </metadata>
+</package>`)); err != nil {
+		t.Fatalf("write nuspec: %v", err)
+	}
+	licenseFile, err := writer.Create("LICENSE.txt")
+	if err != nil {
+		t.Fatalf("create license: %v", err)
+	}
+	if _, err := licenseFile.Write([]byte("MIT License\n\nCopyright (c) 2024 Example")); err != nil {
+		t.Fatalf("write license: %v", err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("close archive: %v", err)
+	}
+
+	var server *httptest.Server
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/sample.package/1.2.3.json":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"catalogEntry":"` + server.URL + `/catalog/sample.package.1.2.3.json","packageContent":"` + server.URL + `/package/sample.package.1.2.3.nupkg"}`))
+		case "/catalog/sample.package.1.2.3.json":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"authors":"Sample Author","projectUrl":"https://example.test/sample","published":"2024-02-03T00:00:00Z"}`))
+		case "/package/sample.package.1.2.3.nupkg":
+			w.Header().Set("Content-Type", "application/octet-stream")
+			_, _ = w.Write(archive.Bytes())
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	doc := inventory.Document{
+		Sources: []inventory.Source{{
+			ID:       "sbom",
+			Kind:     "spdx-json",
+			Location: "/tmp/app.spdx.json",
+		}},
+		Packages: []inventory.Package{{
+			Provenance: inventory.PackageProvenance{
+				SourceIDs: []string{"sbom"},
+			},
+			Ecosystem:  "dotnet",
+			Name:       "Sample.Package",
+			Version:    "1.2.3",
+			LicenseKey: cat.Fallback,
+		}},
+	}
+
+	enriched, err := Apply(Config{
+		Client:                   server.Client(),
+		Catalog:                  cat,
+		NuGetGlobalPackagesRoot:  filepath.Join(t.TempDir(), "missing"),
+		NuGetRegistrationBaseURL: server.URL,
+	}, doc)
+	if err != nil {
+		t.Fatalf("apply enrichment: %v", err)
+	}
+
+	pkg := enriched.Packages[0]
+	if pkg.Provenance.ArtifactResolution == nil {
+		t.Fatal("expected artifact resolution")
+	}
+	if pkg.Provenance.ArtifactResolution.Kind != "remote-package-content" || !pkg.Provenance.ArtifactResolution.ReviewRequired {
+		t.Fatalf("artifact resolution = %#v", pkg.Provenance.ArtifactResolution)
+	}
+	if len(enriched.Diagnostics) != 1 || enriched.Diagnostics[0].Code != "remote_resolution_fallback_used" || enriched.Diagnostics[0].Severity != "warning" {
+		t.Fatalf("diagnostics = %#v", enriched.Diagnostics)
+	}
+	if !strings.Contains(enriched.Diagnostics[0].Message, "manual review required") {
+		t.Fatalf("diagnostic message = %#v", enriched.Diagnostics[0])
+	}
+}
+
+func TestApplyMarksRemoteMetadataFallbackForReviewWithoutMetadataOverwrite(t *testing.T) {
+	t.Parallel()
+
+	cat, err := catalog.Load(filepath.Join("..", "..", "configs", "licenses.json"))
+	if err != nil {
+		t.Fatalf("load catalog: %v", err)
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/react/18.2.0" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+  "license": "MIT",
+  "homepage": "https://react.dev",
+  "repository": { "url": "https://github.com/facebook/react" },
+  "author": { "name": "Meta" }
+}`))
+	}))
+	defer server.Close()
+
+	doc := inventory.Document{
+		Sources: []inventory.Source{{
+			ID:       "sbom",
+			Kind:     "cyclonedx-json",
+			Location: "/tmp/app.cdx.json",
+		}},
+		Packages: []inventory.Package{{
+			Provenance: inventory.PackageProvenance{
+				SourceIDs: []string{"sbom"},
+			},
+			Ecosystem:       "node",
+			Name:            "react",
+			Version:         "18.2.0",
+			RawLicense:      "MIT",
+			LicenseKey:      "MIT",
+			Repository:      "https://github.com/facebook/react",
+			Homepage:        "https://react.dev",
+			CopyrightHolder: "Meta",
+			CopyrightYear:   2026,
+			MetadataSource:  "cyclonedx-json",
+		}},
+	}
+
+	enriched, err := Apply(Config{
+		Client:              server.Client(),
+		Catalog:             cat,
+		NodeRegistryBaseURL: server.URL,
+	}, doc)
+	if err != nil {
+		t.Fatalf("apply enrichment: %v", err)
+	}
+
+	if len(enriched.Sources) != 1 {
+		t.Fatalf("sources = %#v", enriched.Sources)
+	}
+	pkg := enriched.Packages[0]
+	if pkg.MetadataSource != "cyclonedx-json" || !slices.Equal(pkg.Provenance.SourceIDs, []string{"sbom"}) {
+		t.Fatalf("package should keep source provenance = %#v", pkg)
+	}
+	if pkg.Provenance.ArtifactResolution == nil || pkg.Provenance.ArtifactResolution.Kind != "remote-metadata" || !pkg.Provenance.ArtifactResolution.ReviewRequired {
+		t.Fatalf("artifact resolution = %#v", pkg.Provenance.ArtifactResolution)
+	}
+	if len(enriched.Diagnostics) != 1 || enriched.Diagnostics[0].Code != "remote_resolution_fallback_used" {
+		t.Fatalf("diagnostics = %#v", enriched.Diagnostics)
 	}
 }
 

@@ -8,6 +8,9 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"depaudit-license/internal/externalaccess"
+	"depaudit-license/internal/inventory"
 )
 
 const DefaultNodeRegistryBaseURL = "https://registry.npmjs.org"
@@ -43,7 +46,11 @@ func (r *nodeResolver) resolve(packageName string, version string, projectDir st
 
 	endpoint := strings.TrimRight(firstNonEmpty(r.registryBaseURL, DefaultNodeRegistryBaseURL), "/") +
 		"/" + url.PathEscape(packageName) + "/" + url.PathEscape(version)
-	body, err := requestJSON(r.client, endpoint)
+	body, err := requestJSON(r.client, endpoint, externalaccess.Service{
+		ID:      "npm-registry",
+		Purpose: MetadataEnrichmentSourceKind,
+		BaseURL: firstNonEmpty(r.registryBaseURL, DefaultNodeRegistryBaseURL),
+	})
 	if err != nil {
 		r.cache[cacheKey] = meta
 		return meta
@@ -69,16 +76,23 @@ func (r *nodeResolver) resolve(packageName string, version string, projectDir st
 		packageName,
 	)
 	meta.Source = "npm-registry-version"
+	meta.ArtifactResolution = &inventory.ArtifactResolution{
+		Kind:           "remote-metadata",
+		Detail:         "npm-registry-version",
+		ReviewRequired: true,
+		ReviewReason:   "local-package-manager-artifact-not-available",
+	}
 
 	r.cache[cacheKey] = meta
 	return meta
 }
 
-func requestJSON(client *http.Client, endpoint string) ([]byte, error) {
+func requestJSON(client *http.Client, endpoint string, service externalaccess.Service) ([]byte, error) {
 	req, err := http.NewRequest(http.MethodGet, endpoint, nil)
 	if err != nil {
 		return nil, err
 	}
+	req = externalaccess.WithRequestService(req, service)
 	req.Header.Set("User-Agent", "depaudit-license")
 	req.Header.Set("Accept", "application/json")
 

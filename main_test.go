@@ -376,21 +376,6 @@ func TestParseFlagsRejectsMissingLicenseOverrideFile(t *testing.T) {
 	}
 }
 
-func TestParseFlagsSynthesizesLegacyExcludePatternsIntoPolicy(t *testing.T) {
-	t.Parallel()
-
-	cfg, err := parseFlags([]string{"-exclude-patterns", "eslint, webpack"})
-	if err != nil {
-		t.Fatalf("parse flags: %v", err)
-	}
-	if len(cfg.excludePatterns) != 2 {
-		t.Fatalf("unexpected exclude patterns: %#v", cfg.excludePatterns)
-	}
-	if len(cfg.excludePolicy.ShallowExcludes) != 1 {
-		t.Fatalf("expected synthesized shallow rule, got %d", len(cfg.excludePolicy.ShallowExcludes))
-	}
-}
-
 func TestParseFlagsRejectsInvalidExcludePolicy(t *testing.T) {
 	t.Parallel()
 
@@ -488,9 +473,6 @@ func TestResolveAssetPathsReturnsErrorWhenAnyAssetIsMissing(t *testing.T) {
 func TestHelperFunctions(t *testing.T) {
 	t.Parallel()
 
-	if got := splitPatterns(" React, vite ,,TEST "); len(got) != 3 || got[0] != "react" || got[2] != "test" {
-		t.Fatalf("splitPatterns = %#v", got)
-	}
 	if !exists("configs") {
 		t.Fatal("expected configs to exist")
 	}

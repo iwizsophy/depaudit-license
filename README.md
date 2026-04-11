@@ -157,7 +157,6 @@ License definitions and descriptions:
 - `-license-text-bundle` overrides locale-based bundle resolution
 - `-license-override-file` loads a package-level override JSON for manually resolving licenses such as `Unknown`
 - `-exclude-policy` loads versioned shallow/subgraph exclude policy JSON
-- `-exclude-patterns` remains supported and is internally synthesized as a legacy shallow rule
 
 The built-in catalog now also includes review-only definitions for common source-available and proprietary-adjacent licenses. When a package matches one of these definitions, it can resolve out of `Unknown`, but the matched license still carries `requires_manual_review: true` and should not be treated as pre-approved OSS without policy review.
 
@@ -322,8 +321,6 @@ When endpoint overrides are used, the selected mirror or proxy becomes part of t
 Use `shallow exclude` when you want to hide packages from the rendered report / legal notice output but still keep an audit trail in JSON output. Excluded packages are removed from visible package lists, license groups, production inventory, and legal notice evidence, but remain visible in `excludedPackages` with rule metadata.
 
 Use `subgraph exclude` when you want to remove a matched root package and dependencies that are reachable only from that root before merge. Shared dependencies are preserved if another non-excluded root still reaches them. If graph support is unavailable, `onUnsupported` controls whether the policy should `warn`, `error`, or `ignore`.
-
-`-exclude-patterns` remains a legacy shorthand for simple shallow exclusion by package-name fragment. It is internally converted into a synthesized shallow rule, so it cannot express project path, dependency type, runtime-asset, or graph-based behavior.
 
 Minimal example:
 

@@ -20,9 +20,8 @@ import (
 var now = time.Now
 
 type Config struct {
-	Root            string
-	ExcludePatterns []string
-	ShallowRules    []policy.Rule
+	Root         string
+	ShallowRules []policy.Rule
 }
 
 type View struct {
@@ -34,7 +33,6 @@ type View struct {
 	ProductionLicenses  int                    `json:"productionLicenses"`
 	Ecosystems          []string               `json:"ecosystems"`
 	DependencyTypes     []string               `json:"dependencyTypes"`
-	ExcludePatterns     []string               `json:"excludePatterns,omitempty"`
 	RiskSummary         []RiskStat             `json:"riskSummary"`
 	Groups              []LicenseGroup         `json:"groups"`
 	Packages            []inventory.Package    `json:"packages"`
@@ -153,7 +151,6 @@ func BuildDocument(cfg Config, doc inventory.Document, cat *catalog.Catalog) Vie
 		ProductionLicenses:  len(productionLicenseSet),
 		Ecosystems:          uniquePackageField(visiblePackages, func(pkg inventory.Package) string { return pkg.Ecosystem }),
 		DependencyTypes:     uniquePackageField(visiblePackages, func(pkg inventory.Package) string { return pkg.DependencyType }),
-		ExcludePatterns:     cfg.ExcludePatterns,
 		RiskSummary:         riskSummary,
 		Groups:              allGroups,
 		Packages:            visiblePackages,

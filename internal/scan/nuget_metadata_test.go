@@ -889,3 +889,76 @@ func TestReadZipFileRejectsOversizedEntry(t *testing.T) {
 		t.Fatal("expected oversized zip entry error")
 	}
 }
+
+func TestNugetResolverRegistrationRejectsOversizedMetadataResponses(t *testing.T) {
+	t.Parallel()
+
+	t.Run("registration-leaf", func(t *testing.T) {
+		var server *httptest.Server
+		server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch r.URL.Path {
+			case "/sample.package/1.0.0.json":
+				w.Header().Set("Content-Type", "application/json")
+				w.Header().Set("Content-Length", "512")
+				_, _ = w.Write([]byte(`{"catalogEntry":"` + server.URL + `/catalog/sample.package.1.0.0.json"}`))
+			default:
+				http.NotFound(w, r)
+			}
+		}))
+		defer server.Close()
+
+		_, ok, err := (&nugetResolver{
+			client:              server.Client(),
+			registrationBaseURL: server.URL,
+			artifactReadLimits: ArtifactReadLimits{
+				MaxPackageArtifactBytes:  DefaultMaxPackageArtifactBytes,
+				MaxPackageMetadataBytes:  16,
+				MaxEmbeddedLicenseBytes:  DefaultMaxEmbeddedLicenseBytes,
+				MaxPackageArchiveEntries: DefaultMaxPackageArchiveEntries,
+			},
+		}).resolveFromRegistration("Sample.Package", "1.0.0")
+		if ok {
+			t.Fatal("expected oversized registration leaf to fail")
+		}
+		var safetyErr *ArtifactSafetyError
+		if !errors.As(err, &safetyErr) {
+			t.Fatalf("expected ArtifactSafetyError, got %T: %v", err, err)
+		}
+	})
+
+	t.Run("catalog-entry", func(t *testing.T) {
+		var server *httptest.Server
+		server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch r.URL.Path {
+			case "/sample.package/1.0.0.json":
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{"catalogEntry":"` + server.URL + `/catalog/sample.package.1.0.0.json"}`))
+			case "/catalog/sample.package.1.0.0.json":
+				w.Header().Set("Content-Type", "application/json")
+				w.Header().Set("Content-Length", "512")
+				_, _ = w.Write([]byte(`{"authors":"Sample Author","licenseExpression":"MIT"}`))
+			default:
+				http.NotFound(w, r)
+			}
+		}))
+		defer server.Close()
+
+		_, ok, err := (&nugetResolver{
+			client:              server.Client(),
+			registrationBaseURL: server.URL,
+			artifactReadLimits: ArtifactReadLimits{
+				MaxPackageArtifactBytes:  DefaultMaxPackageArtifactBytes,
+				MaxPackageMetadataBytes:  16,
+				MaxEmbeddedLicenseBytes:  DefaultMaxEmbeddedLicenseBytes,
+				MaxPackageArchiveEntries: DefaultMaxPackageArchiveEntries,
+			},
+		}).resolveFromRegistration("Sample.Package", "1.0.0")
+		if ok {
+			t.Fatal("expected oversized catalog entry to fail")
+		}
+		var safetyErr *ArtifactSafetyError
+		if !errors.As(err, &safetyErr) {
+			t.Fatalf("expected ArtifactSafetyError, got %T: %v", err, err)
+		}
+	})
+}

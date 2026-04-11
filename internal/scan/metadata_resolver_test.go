@@ -17,14 +17,14 @@ type roundTripFunc = testutil.RoundTripFunc
 func TestRequestJSONHandlesStatusAndTransportErrors(t *testing.T) {
 	t.Parallel()
 
-	if _, err := requestJSON(&http.Client{}, "://bad-url", externalaccess.Service{}); err == nil {
+	if _, err := requestJSON(&http.Client{}, "://bad-url", externalaccess.Service{}, DefaultMaxPackageMetadataBytes); err == nil {
 		t.Fatal("expected invalid URL error")
 	}
 
 	client := &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		return nil, errors.New("boom")
 	})}
-	if _, err := requestJSON(client, "https://example.test", externalaccess.Service{}); err == nil {
+	if _, err := requestJSON(client, "https://example.test", externalaccess.Service{}, DefaultMaxPackageMetadataBytes); err == nil {
 		t.Fatal("expected transport error")
 	}
 
@@ -35,7 +35,7 @@ func TestRequestJSONHandlesStatusAndTransportErrors(t *testing.T) {
 			Header:     make(http.Header),
 		}, nil
 	})}
-	if _, err := requestJSON(client, "https://example.test", externalaccess.Service{}); err == nil {
+	if _, err := requestJSON(client, "https://example.test", externalaccess.Service{}, DefaultMaxPackageMetadataBytes); err == nil {
 		t.Fatal("expected status error")
 	}
 
@@ -46,7 +46,7 @@ func TestRequestJSONHandlesStatusAndTransportErrors(t *testing.T) {
 			Header:     make(http.Header),
 		}, nil
 	})}
-	if _, err := requestJSON(client, "https://example.test", externalaccess.Service{}); err == nil {
+	if _, err := requestJSON(client, "https://example.test", externalaccess.Service{}, DefaultMaxPackageMetadataBytes); err == nil {
 		t.Fatal("expected body read error")
 	}
 }
@@ -66,7 +66,7 @@ func TestRequestJSONSetsAcceptAndUserAgentHeaders(t *testing.T) {
 		}, nil
 	})}
 
-	body, err := requestJSON(client, "https://example.test/pkg/react", externalaccess.Service{})
+	body, err := requestJSON(client, "https://example.test/pkg/react", externalaccess.Service{}, DefaultMaxPackageMetadataBytes)
 	if err != nil {
 		t.Fatalf("requestJSON: %v", err)
 	}
@@ -119,28 +119,31 @@ func TestSanitizeVersionAndMakeNodePackageKey(t *testing.T) {
 	}
 }
 
-func TestNodeResolverResolveHelperBranches(t *testing.T) {
+func TestNodeResolverResolveRemoteHelperBranches(t *testing.T) {
 	t.Parallel()
 
 	cached := metadata{RawLicense: "MIT", Source: "cache"}
 	resolver := &nodeResolver{cache: map[string]metadata{"react@19.2.4": cached}}
-	if got := resolver.resolve("react", "19.2.4", ""); got != cached {
+	if got, err := resolver.resolveRemote("react", "19.2.4"); err != nil || got != cached {
 		t.Fatalf("cached resolve = %#v", got)
 	}
 
 	resolver = &nodeResolver{cache: map[string]metadata{}, client: nil}
-	got := resolver.resolve("react", "19.2.4", "")
+	got, err := resolver.resolveRemote("react", "19.2.4")
+	if err != nil {
+		t.Fatalf("resolveRemote: %v", err)
+	}
 	if got.Source != "fallback" || got.Holder != "react" || got.RawLicense != "Unknown" {
 		t.Fatalf("nil client fallback = %#v", got)
 	}
 
 	resolver = &nodeResolver{cache: map[string]metadata{}, client: &http.Client{}}
-	got = resolver.resolve("react", "^19.0.0", "")
+	got, err = resolver.resolveRemote("react", "^19.0.0")
+	if err != nil {
+		t.Fatalf("resolveRemote: %v", err)
+	}
 	if got.Source != "fallback" || got.RawLicense != "Unknown" {
 		t.Fatalf("range fallback = %#v", got)
-	}
-	if cached := resolver.cache["react@^19.0.0"]; cached.Source != "fallback" {
-		t.Fatalf("cache after range fallback = %#v", cached)
 	}
 
 	client := &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
@@ -152,15 +155,15 @@ func TestNodeResolverResolveHelperBranches(t *testing.T) {
 		}, nil
 	})}
 	resolver = &nodeResolver{cache: map[string]metadata{}, client: client, registryBaseURL: "https://registry.example.test"}
-	got = resolver.resolve("react", "19.2.4", "")
+	got, err = resolver.resolveRemote("react", "19.2.4")
+	if err != nil {
+		t.Fatalf("resolveRemote: %v", err)
+	}
 	if got.Source != "npm-registry-version" || got.RawLicense != "MIT" {
 		t.Fatalf("registry resolve = %#v", got)
 	}
 	if got.ArtifactResolution == nil || got.ArtifactResolution.Kind != "remote-metadata" || got.ArtifactResolution.Detail != "npm-registry-version" || !got.ArtifactResolution.ReviewRequired {
 		t.Fatalf("artifact resolution = %#v", got.ArtifactResolution)
-	}
-	if cached := resolver.cache["react@19.2.4"]; cached.Source != "npm-registry-version" {
-		t.Fatalf("cache after registry resolve = %#v", cached)
 	}
 
 	client = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
@@ -171,9 +174,63 @@ func TestNodeResolverResolveHelperBranches(t *testing.T) {
 		}, nil
 	})}
 	resolver = &nodeResolver{cache: map[string]metadata{}, client: client, registryBaseURL: "https://registry.example.test"}
-	got = resolver.resolve("react", "19.2.4", "")
+	got, err = resolver.resolveRemote("react", "19.2.4")
+	if err != nil {
+		t.Fatalf("resolveRemote: %v", err)
+	}
 	if got.Source != "fallback" || got.RawLicense != "Unknown" {
 		t.Fatalf("invalid json fallback = %#v", got)
+	}
+}
+
+func TestRequestJSONRejectsOversizedResponse(t *testing.T) {
+	t.Parallel()
+
+	client := &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode:    http.StatusOK,
+			ContentLength: 32,
+			Body:          io.NopCloser(strings.NewReader(`{"ok":true}`)),
+			Header:        make(http.Header),
+		}, nil
+	})}
+	if _, err := requestJSON(client, "https://example.test", externalaccess.Service{}, 16); err == nil {
+		t.Fatal("expected oversized content-length error")
+	}
+
+	client = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader(`{"payload":"01234567890123456789"}`)),
+			Header:     make(http.Header),
+		}, nil
+	})}
+	if _, err := requestJSON(client, "https://example.test", externalaccess.Service{}, 16); err == nil {
+		t.Fatal("expected oversized streamed body error")
+	}
+}
+
+func TestNodeResolverResolveRemoteReturnsArtifactSafetyError(t *testing.T) {
+	t.Parallel()
+
+	client := &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode:    http.StatusOK,
+			ContentLength: 64,
+			Body:          io.NopCloser(strings.NewReader(`{"license":"MIT"}`)),
+			Header:        make(http.Header),
+		}, nil
+	})}
+
+	_, err := (&nodeResolver{
+		client:             client,
+		cache:              map[string]metadata{},
+		registryBaseURL:    "https://registry.example.test",
+		artifactReadLimits: ArtifactReadLimits{MaxPackageMetadataBytes: 8},
+	}).resolveRemote("react", "19.2.4")
+	var safetyErr *ArtifactSafetyError
+	if !errors.As(err, &safetyErr) {
+		t.Fatalf("expected ArtifactSafetyError, got %T: %v", err, err)
 	}
 }
 
@@ -201,7 +258,10 @@ func TestNodeResolverResolveBuildsEscapedEndpointAndNormalizesPartialRegistryMet
 		})},
 	}
 
-	got := resolver.resolve("@scope/pkg", "1.2.3", "")
+	got, err := resolver.resolveRemote("@scope/pkg", "1.2.3")
+	if err != nil {
+		t.Fatalf("resolveRemote: %v", err)
+	}
 	if gotPath != "https://registry.example.test/@scope%2Fpkg/1.2.3" {
 		t.Fatalf("request path = %q", gotPath)
 	}

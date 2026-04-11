@@ -29,7 +29,13 @@ func TestNodeResolverUsesInstalledPackageMetadata(t *testing.T) {
 	}
 
 	resolver := &nodeResolver{cache: map[string]metadata{}}
-	meta := resolver.resolve("react", "^18.0.0", root)
+	meta, ok, err := resolver.resolveFromInstalledPackage("react", "^18.0.0", root)
+	if err != nil {
+		t.Fatalf("resolveFromInstalledPackage: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected installed package metadata")
+	}
 
 	if meta.Source != "node-modules" {
 		t.Fatalf("source = %q", meta.Source)
@@ -69,7 +75,10 @@ func TestNodeResolverFallsBackToExactRegistryVersion(t *testing.T) {
 		registryBaseURL: server.URL,
 	}
 
-	meta := resolver.resolve("react", "18.2.0", t.TempDir())
+	meta, err := resolver.resolveRemote("react", "18.2.0")
+	if err != nil {
+		t.Fatalf("resolveRemote: %v", err)
+	}
 	if meta.Source != "npm-registry-version" {
 		t.Fatalf("source = %q", meta.Source)
 	}
@@ -88,7 +97,10 @@ func TestNodeResolverDoesNotUseLatestForNonExactVersion(t *testing.T) {
 	t.Parallel()
 
 	resolver := &nodeResolver{cache: map[string]metadata{}}
-	meta := resolver.resolve("react", "^18.0.0", t.TempDir())
+	meta, err := resolver.resolveRemote("react", "^18.0.0")
+	if err != nil {
+		t.Fatalf("resolveRemote: %v", err)
+	}
 
 	if meta.Source != "fallback" {
 		t.Fatalf("source = %q", meta.Source)
@@ -101,18 +113,22 @@ func TestNodeResolverDoesNotUseLatestForNonExactVersion(t *testing.T) {
 func TestNodeResolverUsesCacheAndFallbackBranches(t *testing.T) {
 	t.Parallel()
 
-	resolver := &nodeResolver{
-		cache: map[string]metadata{
-			"react@19.2.4": {RawLicense: "MIT", Source: "cached"},
-		},
+	resolver := &nodeResolver{cache: map[string]metadata{
+		"react@19.2.4": {RawLicense: "MIT", Source: "cached"},
+	}}
+	meta, err := resolver.resolveRemote("react", "19.2.4")
+	if err != nil {
+		t.Fatalf("resolveRemote: %v", err)
 	}
-	meta := resolver.resolve("react", "19.2.4", t.TempDir())
 	if meta.Source != "cached" || meta.RawLicense != "MIT" {
 		t.Fatalf("cached resolve = %#v", meta)
 	}
 
 	resolver = &nodeResolver{cache: map[string]metadata{}}
-	meta = resolver.resolve("react", "19.2.4", t.TempDir())
+	meta, err = resolver.resolveRemote("react", "19.2.4")
+	if err != nil {
+		t.Fatalf("resolveRemote: %v", err)
+	}
 	if meta.Source != "fallback" || meta.RawLicense != "Unknown" {
 		t.Fatalf("nil client fallback = %#v", meta)
 	}
@@ -128,7 +144,10 @@ func TestNodeResolverUsesCacheAndFallbackBranches(t *testing.T) {
 		cache:           map[string]metadata{},
 		registryBaseURL: server.URL,
 	}
-	meta = resolver.resolve("react", "19.2.4", t.TempDir())
+	meta, err = resolver.resolveRemote("react", "19.2.4")
+	if err != nil {
+		t.Fatalf("resolveRemote: %v", err)
+	}
 	if meta.Source != "fallback" || meta.RawLicense != "Unknown" {
 		t.Fatalf("bad json fallback = %#v", meta)
 	}

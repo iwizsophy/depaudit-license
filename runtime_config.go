@@ -3,7 +3,9 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -48,7 +50,6 @@ type runtimeConfigFile struct {
 	MaxPackageMetadataBytes  *int64   `json:"maxPackageMetadataBytes,omitempty"`
 	MaxEmbeddedLicenseBytes  *int64   `json:"maxEmbeddedLicenseBytes,omitempty"`
 	MaxPackageArchiveEntries *int     `json:"maxPackageArchiveEntries,omitempty"`
-	ExcludePatterns          []string `json:"excludePatterns,omitempty"`
 	TimeoutSeconds           *int     `json:"timeoutSeconds,omitempty"`
 }
 
@@ -96,6 +97,9 @@ func loadRuntimeConfig(args []string) (runtimeConfigFile, string, error) {
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&file); err != nil {
 		return runtimeConfigFile{}, "", err
+	}
+	if err := decoder.Decode(&struct{}{}); err != nil && !errors.Is(err, io.EOF) {
+		return runtimeConfigFile{}, "", fmt.Errorf("invalid trailing content in runtime config: %w", err)
 	}
 	if strings.TrimSpace(file.Version) != runtimeConfigVersionV1Alpha1 {
 		return runtimeConfigFile{}, "", fmt.Errorf("unsupported runtime config version %q", file.Version)

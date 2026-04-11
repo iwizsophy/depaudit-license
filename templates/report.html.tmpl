@@ -19,9 +19,6 @@
         <div class="hero-meta">
           <div>Input: <code>{{.Root}}</code></div>
           <div>Generated at: <code>{{.GeneratedAt}}</code></div>
-          {{if .ExcludePatterns}}
-          <div>Production exclusions: <code>{{range $index, $value := .ExcludePatterns}}{{if $index}}, {{end}}{{$value}}{{end}}</code></div>
-          {{end}}
         </div>
       </article>
 

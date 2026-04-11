@@ -115,9 +115,6 @@
     "maxPackageArchiveEntries": {
       "$ref": "#/$defs/positiveInt"
     },
-    "excludePatterns": {
-      "$ref": "#/$defs/stringList"
-    },
     "timeoutSeconds": {
       "$ref": "#/$defs/positiveInt"
     }
@@ -143,4 +140,3 @@
     }
   }
 }
-

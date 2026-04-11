@@ -157,7 +157,6 @@ macOS:
 - `-license-text-bundle` を指定すると locale ベース解決よりそのパスを優先します
 - `-license-override-file` は `Unknown` など未解決の license を package 単位で手動解決する override JSON を読み込みます
 - `-exclude-policy` は versioned な shallow/subgraph exclude policy JSON を読み込みます
-- `-exclude-patterns` は引き続き利用でき、内部的には legacy shallow rule として扱われます
 
 既定 catalog には、common な source-available / proprietary-adjacent license を review-only key として識別する定義も含まれます。これらに一致した package は `Unknown` からは抜けますが、`requires_manual_review: true` のままであり、事前承認済み OSS と同じ扱いにはしません。
 
@@ -322,8 +321,6 @@ endpoint override を使う場合、選択した mirror / proxy 自体が eviden
 `shallow exclude` は、rendered な report / legal notice から package を外したいが、JSON 上の監査痕跡は残したい場合に使います。除外 package は visible package list、license group、production inventory、legal notice evidence からは外れますが、JSON 出力では `excludedPackages` に rule metadata 付きで残ります。
 
 `subgraph exclude` は、matched root package と、その root からしか到達できない依存枝を merge 前に落としたい場合に使います。別の非除外 root から到達可能な shared dependency は残ります。graph が利用できない場合は `onUnsupported` で `warn` / `error` / `ignore` を選べます。
-
-`-exclude-patterns` は、package 名断片ベースの簡易 shallow exclude として引き続き使えます。ただし内部的には合成 shallow rule に変換されるため、project path、dependency type、runtime asset、graph ベース条件は表現できません。
 
 最小例:
 

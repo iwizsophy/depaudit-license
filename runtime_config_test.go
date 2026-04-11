@@ -40,6 +40,20 @@ func TestLoadRuntimeConfigRejectsUnsupportedVersion(t *testing.T) {
 	}
 }
 
+func TestLoadRuntimeConfigRejectsTrailingContent(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "depaudit-license.config.json")
+	if err := os.WriteFile(configPath, []byte("{\"version\":\"v1alpha1\"}\n{\"extra\":true}"), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	if _, _, err := loadRuntimeConfig([]string{"-config", configPath}); err == nil {
+		t.Fatal("expected trailing content error")
+	}
+}
+
 func TestParseFlagsUsesRuntimeConfigDefaults(t *testing.T) {
 	t.Parallel()
 
@@ -97,7 +111,6 @@ func TestParseFlagsUsesRuntimeConfigDefaults(t *testing.T) {
   "maxPackageMetadataBytes": 654321,
   "maxEmbeddedLicenseBytes": 111222,
   "maxPackageArchiveEntries": 333,
-  "excludePatterns": ["ESLint", "vite"],
   "timeoutSeconds": 60
 }`), 0o644); err != nil {
 		t.Fatalf("write runtime config: %v", err)
@@ -173,9 +186,6 @@ func TestParseFlagsUsesRuntimeConfigDefaults(t *testing.T) {
 	}
 	if cfg.timeout != 60*time.Second {
 		t.Fatalf("timeout = %v", cfg.timeout)
-	}
-	if len(cfg.excludePatterns) != 2 || cfg.excludePatterns[0] != "eslint" || cfg.excludePatterns[1] != "vite" {
-		t.Fatalf("excludePatterns = %#v", cfg.excludePatterns)
 	}
 }
 

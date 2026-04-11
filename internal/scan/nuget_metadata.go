@@ -161,6 +161,7 @@ func (r *nugetResolver) resolveFromRegistration(packageName string, version stri
 	if strings.TrimSpace(version) == "" || r.client == nil {
 		return metadata{}, false, nil
 	}
+	limits := NormalizeArtifactReadLimits(r.artifactReadLimits)
 
 	endpoint := fmt.Sprintf(
 		"%s/%s/%s.json",
@@ -174,8 +175,11 @@ func (r *nugetResolver) resolveFromRegistration(packageName string, version stri
 		Purpose: MetadataEnrichmentSourceKind,
 		BaseURL: r.resolveRegistrationBaseURL(),
 	}
-	body, err := requestJSON(r.client, endpoint, service)
+	body, err := requestJSON(r.client, endpoint, service, limits.MaxPackageMetadataBytes)
 	if err != nil {
+		if safetyErr := wrapArtifactSafetyError(packageName, version, endpoint, "NuGet registration metadata", err); safetyErr != nil {
+			return metadata{}, false, safetyErr
+		}
 		return metadata{}, false, nil
 	}
 
@@ -187,8 +191,11 @@ func (r *nugetResolver) resolveFromRegistration(packageName string, version stri
 		return metadata{}, false, nil
 	}
 
-	catalogBody, err := requestJSON(r.client, leaf.CatalogEntry, service)
+	catalogBody, err := requestJSON(r.client, leaf.CatalogEntry, service, limits.MaxPackageMetadataBytes)
 	if err != nil {
+		if safetyErr := wrapArtifactSafetyError(packageName, version, leaf.CatalogEntry, "NuGet catalog metadata", err); safetyErr != nil {
+			return metadata{}, false, safetyErr
+		}
 		return metadata{}, false, nil
 	}
 

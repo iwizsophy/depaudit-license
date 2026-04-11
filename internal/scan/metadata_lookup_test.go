@@ -1,6 +1,7 @@
 package scan
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -737,5 +738,38 @@ func TestResolveLicenseKeyFromMetadataBranches(t *testing.T) {
 	)
 	if got != "Apache-2.0" {
 		t.Fatalf("embedded text only = %q", got)
+	}
+}
+
+func TestMetadataLookupServicePropagatesRemoteMetadataSafetyError(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Length", "128")
+		_, _ = w.Write([]byte(`{"license":"MIT"}`))
+	}))
+	defer server.Close()
+
+	service := mustNewMetadataLookupService(t, MetadataLookupConfig{
+		Client:              server.Client(),
+		NodeRegistryBaseURL: server.URL,
+		ArtifactReadLimits: ArtifactReadLimits{
+			MaxPackageArtifactBytes:  DefaultMaxPackageArtifactBytes,
+			MaxPackageMetadataBytes:  8,
+			MaxEmbeddedLicenseBytes:  DefaultMaxEmbeddedLicenseBytes,
+			MaxPackageArchiveEntries: DefaultMaxPackageArchiveEntries,
+		},
+		Mode: MetadataLookupModeRemote,
+	})
+
+	_, _, err := service.lookupMetadata(inventory.Package{
+		Ecosystem: "node",
+		Name:      "react",
+		Version:   "19.2.4",
+	})
+	var safetyErr *ArtifactSafetyError
+	if !errors.As(err, &safetyErr) {
+		t.Fatalf("expected ArtifactSafetyError, got %T: %v", err, err)
 	}
 }

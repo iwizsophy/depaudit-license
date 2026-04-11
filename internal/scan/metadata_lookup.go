@@ -106,7 +106,10 @@ func (s *MetadataLookupService) lookupMetadata(pkg inventory.Package) (metadata,
 		if s.mode == MetadataLookupModeLocal {
 			return metadata{}, false, nil
 		}
-		meta := s.node.resolveRemote(pkg.Name, pkg.Version)
+		meta, err := s.node.resolveRemote(pkg.Name, pkg.Version)
+		if err != nil {
+			return metadata{}, false, err
+		}
 		return meta, strings.TrimSpace(meta.Source) != "" && meta.Source != "fallback", nil
 	case "dotnet":
 		if s.mode != MetadataLookupModeRemote {

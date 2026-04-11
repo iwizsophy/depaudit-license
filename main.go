@@ -62,7 +62,6 @@ type config struct {
 	maxPackageMetadataBytes  int64
 	maxEmbeddedLicenseBytes  int64
 	maxPackageArchiveEntries int
-	excludePatterns          []string
 	timeout                  time.Duration
 }
 
@@ -202,9 +201,8 @@ func run(args []string, stdout io.Writer) error {
 	writeRemoteResolutionFallbackWarning(inputResult.Document)
 
 	view := report.BuildDocument(report.Config{
-		Root:            inputResult.Root,
-		ExcludePatterns: cfg.excludePatterns,
-		ShallowRules:    cfg.excludePolicy.ShallowExcludes,
+		Root:         inputResult.Root,
+		ShallowRules: cfg.excludePolicy.ShallowExcludes,
 	}, inputResult.Document, cat)
 	view, _, err = report.ExportEmbeddedLicenseTexts(view, report.LicenseTextExportConfig{
 		OutputDir: filepath.Join(filepath.Dir(cfg.outputLegalNoticeHTML), "license-texts"),
@@ -295,7 +293,6 @@ func run(args []string, stdout io.Writer) error {
 
 func parseFlags(args []string) (config, error) {
 	cfg := defaultRuntimeConfig()
-	var excludePatterns string
 	timeoutSeconds := 0
 	var licenseCatalogs multiStringFlag
 	var inputs multiStringFlag
@@ -308,7 +305,6 @@ func parseFlags(args []string) (config, error) {
 	if err := applyRuntimeConfigDefaults(&cfg, runtimeConfig); err != nil {
 		return config{}, err
 	}
-	excludePatterns = strings.Join(runtimeConfig.ExcludePatterns, ",")
 	timeoutSeconds = int(cfg.timeout / time.Second)
 
 	fs := flag.NewFlagSet("depaudit-license", flag.ContinueOnError)
@@ -347,7 +343,6 @@ func parseFlags(args []string) (config, error) {
 	fs.Int64Var(&cfg.maxPackageMetadataBytes, "max-package-metadata-bytes", cfg.maxPackageMetadataBytes, "maximum bytes allowed for a package metadata file loaded into memory")
 	fs.Int64Var(&cfg.maxEmbeddedLicenseBytes, "max-embedded-license-bytes", cfg.maxEmbeddedLicenseBytes, "maximum bytes allowed for an embedded license file loaded into memory")
 	fs.IntVar(&cfg.maxPackageArchiveEntries, "max-package-archive-entries", cfg.maxPackageArchiveEntries, "maximum archive entries allowed when inspecting package artifacts")
-	fs.StringVar(&excludePatterns, "exclude-patterns", excludePatterns, "comma-separated package name fragments to exclude from production notices")
 	fs.IntVar(&timeoutSeconds, "timeout-seconds", timeoutSeconds, "HTTP timeout in seconds")
 	if err := fs.Parse(args); err != nil {
 		return config{}, err
@@ -386,7 +381,6 @@ func parseFlags(args []string) (config, error) {
 		}
 	}
 	cfg.licenseCatalogs = append([]string(nil), licenseCatalogs...)
-	cfg.excludePatterns = splitPatterns(excludePatterns)
 	cfg.excludePolicy = policy.File{Version: policy.VersionV1Alpha1}
 	cfg.licenseOverride = licenseoverride.File{Version: licenseoverride.VersionV1Alpha1}
 	if strings.TrimSpace(cfg.licenseOverridePath) != "" {
@@ -407,7 +401,6 @@ func parseFlags(args []string) (config, error) {
 			return config{}, err
 		}
 	}
-	cfg.excludePolicy = policy.MergeLegacyPatterns(cfg.excludePolicy, cfg.excludePatterns)
 	if vulnerabilityOutputsEnabled(cfg) && strings.TrimSpace(cfg.vulnMode) == vuln.ModeDisabled {
 		cfg.vulnMode = vuln.ModeOSVOnly
 	}
@@ -431,22 +424,6 @@ func parseFlags(args []string) (config, error) {
 		return config{}, err
 	}
 	return cfg, nil
-}
-
-func splitPatterns(raw string) []string {
-	if strings.TrimSpace(raw) == "" {
-		return nil
-	}
-
-	parts := strings.Split(raw, ",")
-	result := make([]string, 0, len(parts))
-	for _, part := range parts {
-		part = strings.TrimSpace(part)
-		if part != "" {
-			result = append(result, strings.ToLower(part))
-		}
-	}
-	return result
 }
 
 func firstNonEmptyString(values ...string) string {

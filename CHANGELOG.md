@@ -6,7 +6,9 @@ The format is intentionally simple and release-oriented.
 
 ## [Unreleased]
 
-No notable changes yet.
+### Changed
+
+- Removed the legacy `-exclude-patterns` CLI shorthand and `excludePatterns` runtime-config field. Shallow output filtering is now configured only through versioned `-exclude-policy` rules.
 
 ## [1.3.0] - 2026-04-11
 

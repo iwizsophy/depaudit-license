@@ -27,9 +27,5 @@
   "maxPackageMetadataBytes": 1048576,
   "maxEmbeddedLicenseBytes": 4194304,
   "maxPackageArchiveEntries": 10000,
-  "excludePatterns": [
-    "eslint",
-    "storybook"
-  ],
   "timeoutSeconds": 15
 }

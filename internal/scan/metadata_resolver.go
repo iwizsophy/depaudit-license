@@ -3,7 +3,6 @@ package scan
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -17,26 +16,10 @@ const DefaultNodeRegistryBaseURL = "https://registry.npmjs.org"
 
 var now = time.Now
 
-func (r *nodeResolver) resolve(packageName string, version string, projectDir string) metadata {
+func (r *nodeResolver) resolveRemote(packageName string, version string) (metadata, error) {
 	cacheKey := makeNodePackageKey(packageName, version)
 	if cached, ok := r.cache[cacheKey]; ok {
-		return cached
-	}
-
-	if local, ok, err := r.resolveFromInstalledPackage(packageName, version, projectDir); err == nil && ok {
-		r.cache[cacheKey] = local
-		return local
-	}
-
-	remote := r.resolveRemote(packageName, version)
-	r.cache[cacheKey] = remote
-	return remote
-}
-
-func (r *nodeResolver) resolveRemote(packageName string, version string) metadata {
-	cacheKey := makeNodePackageKey(packageName, version)
-	if cached, ok := r.cache[cacheKey]; ok {
-		return cached
+		return cached, nil
 	}
 
 	meta := metadata{
@@ -47,26 +30,30 @@ func (r *nodeResolver) resolveRemote(packageName string, version string) metadat
 	}
 
 	if !isExactNodeVersion(version) {
-		return meta
+		return meta, nil
 	}
 	if r.client == nil {
-		return meta
+		return meta, nil
 	}
 
+	limits := NormalizeArtifactReadLimits(r.artifactReadLimits)
 	endpoint := strings.TrimRight(firstNonEmpty(r.registryBaseURL, DefaultNodeRegistryBaseURL), "/") +
 		"/" + url.PathEscape(packageName) + "/" + url.PathEscape(version)
 	body, err := requestJSON(r.client, endpoint, externalaccess.Service{
 		ID:      "npm-registry",
 		Purpose: MetadataEnrichmentSourceKind,
 		BaseURL: firstNonEmpty(r.registryBaseURL, DefaultNodeRegistryBaseURL),
-	})
+	}, limits.MaxPackageMetadataBytes)
 	if err != nil {
-		return meta
+		if safetyErr := wrapArtifactSafetyError(packageName, version, endpoint, "npm registry metadata", err); safetyErr != nil {
+			return metadata{}, safetyErr
+		}
+		return meta, nil
 	}
 
 	var versionPayload npmVersionPayload
 	if err := json.Unmarshal(body, &versionPayload); err != nil {
-		return meta
+		return meta, nil
 	}
 
 	meta.RawLicense = parseLicense(versionPayload.License)
@@ -89,10 +76,10 @@ func (r *nodeResolver) resolveRemote(packageName string, version string) metadat
 		ReviewRequired: true,
 		ReviewReason:   "local-package-manager-artifact-not-available",
 	}
-	return meta
+	return meta, nil
 }
 
-func requestJSON(client *http.Client, endpoint string, service externalaccess.Service) ([]byte, error) {
+func requestJSON(client *http.Client, endpoint string, service externalaccess.Service, maxBytes int64) ([]byte, error) {
 	req, err := http.NewRequest(http.MethodGet, endpoint, nil)
 	if err != nil {
 		return nil, err
@@ -111,7 +98,11 @@ func requestJSON(client *http.Client, endpoint string, service externalaccess.Se
 		return nil, fmt.Errorf("unexpected status %d", resp.StatusCode)
 	}
 
-	body, err := io.ReadAll(resp.Body)
+	if maxBytes > 0 && resp.ContentLength > maxBytes {
+		return nil, &artifactLimitExceededError{reason: fmt.Sprintf("content length %d bytes exceeds limit %d bytes", resp.ContentLength, maxBytes)}
+	}
+
+	body, err := readAllLimited(resp.Body, maxBytes)
 	if err != nil {
 		return nil, err
 	}

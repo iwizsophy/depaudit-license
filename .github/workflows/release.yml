@@ -181,6 +181,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
           mapfile -d '' files < <(find release-artifacts -type f -print0 | sort -z)
           if [ "${#files[@]}" -eq 0 ]; then
